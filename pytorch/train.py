@@ -16,6 +16,31 @@ from mem_transformer import MemTransformerLM
 from utils.exp_utils import create_exp_dir
 from utils.data_parallel import BalancedDataParallel
 
+class AverageMeter(object):
+    """Computes and stores the average and current value.
+
+    Examples::
+        >>> # Initialize a meter to record loss
+        >>> losses = AverageMeter()
+        >>> # Update meter after every minibatch update
+        >>> losses.update(loss_value, batch_size)
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
 parser = argparse.ArgumentParser(description='PyTorch Transformer Language Model')
 parser.add_argument('--data', type=str, default='../data/wikitext-103',
                     help='location of the data corpus')
@@ -386,6 +411,7 @@ logging('#non emb params = {}'.format(args.n_nonemb_param))
 def evaluate(eval_iter):
     # Turn on evaluation mode which disables dropout.
     model.eval()
+    avg_nnzs = None
 
     # If the model does not use memory at all, make the ext_len longer.
     # Otherwise, make the mem_len longer and keep the ext_len the same.
@@ -404,16 +430,22 @@ def evaluate(eval_iter):
             if args.max_eval_steps > 0 and i >= args.max_eval_steps:
                 break
             ret = model(data, target, *mems)
-            loss, mems = ret[0], ret[1:]
+            #  loss, mems = ret[0], ret[1:]
+            relu_outs, loss, mems = ret[0], ret[1], ret[2:]
             loss = loss.mean()
             total_loss += seq_len * loss.float().item()
             total_len += seq_len
+            nnzs = [(relu_out > 0).sum().float().item() / relu_out.numel() for relu_out in relu_outs]
+            if avg_nnzs is None:
+                avg_nnzs = [AverageMeter() for i in range(len(nnzs))]
+            for i in range(len(nnzs)):
+                avg_nnzs[i].update(nnzs[i])
 
     # Switch back to the training mode
     model.reset_length(args.tgt_len, args.ext_len, args.mem_len)
     model.train()
 
-    return total_loss / total_len
+    return total_loss / total_len, avg_nnzs
 
 
 def train():
@@ -424,6 +456,9 @@ def train():
         mems = [tuple() for _ in range(args.batch_chunk)]
     else:
         mems = tuple()
+
+    avg_nnzs = None
+
     train_iter = tr_iter.get_varlen_iter() if args.varlen else tr_iter
     for batch, (data, target, seq_len) in enumerate(train_iter):
         model.zero_grad()
@@ -434,7 +469,8 @@ def train():
                 data_i = data_chunks[i].contiguous()
                 target_i = target_chunks[i].contiguous()
                 ret = para_model(data_i, target_i, *mems[i])
-                loss, mems[i] = ret[0], ret[1:]
+                #  loss, mems[i] = ret[0], ret[1:]
+                relu_outs, loss, mems[i] = ret[0], ret[1], ret[2:]
                 loss = loss.float().mean().type_as(loss) / args.batch_chunk
                 if args.fp16:
                     optimizer.backward(loss)
@@ -443,13 +479,19 @@ def train():
                 train_loss += loss.float().item()
         else:
             ret = para_model(data, target, *mems)
-            loss, mems = ret[0], ret[1:]
+            #  loss, mems = ret[0], ret[1:]
+            relu_outs, loss, mems = ret[0], ret[1], ret[2:]
             loss = loss.float().mean().type_as(loss)
             if args.fp16:
                 optimizer.backward(loss)
             else:
                 loss.backward()
             train_loss += loss.float().item()
+        nnzs = [(relu_out > 0).sum().float().item() / relu_out.numel() for relu_out in relu_outs]
+        if avg_nnzs is None:
+            avg_nnzs = [AverageMeter() for i in range(len(nnzs))]
+        for i in range(len(nnzs)):
+            avg_nnzs[i].update(nnzs[i])
 
         if args.fp16:
             optimizer.clip_master_grads(args.clip)
@@ -488,12 +530,17 @@ def train():
                 log_str += ' | bpc {:9.5f}'.format(cur_loss / math.log(2))
             else:
                 log_str += ' | ppl {:9.3f}'.format(math.exp(cur_loss))
+            final_avg_nnzs = [avg_nnzs[i].avg for i in range(len(avg_nnzs))]
+            for i in range(len(avg_nnzs)):
+                avg_nnzs[i].reset()
+            log_str += " | avg nnz %.2f | max nnz %.2f" % (sum(final_avg_nnzs)/len(final_avg_nnzs)*100, max(final_avg_nnzs)*100)
+
             logging(log_str)
             train_loss = 0
             log_start_time = time.time()
 
         if train_step % args.eval_interval == 0:
-            val_loss = evaluate(va_iter)
+            val_loss, eval_avg_nnzs = evaluate(va_iter)
             logging('-' * 100)
             log_str = '| Eval {:3d} at step {:>8d} | time: {:5.2f}s ' \
                       '| valid loss {:5.2f}'.format(
@@ -503,6 +550,8 @@ def train():
                 log_str += ' | bpc {:9.5f}'.format(val_loss / math.log(2))
             else:
                 log_str += ' | valid ppl {:9.3f}'.format(math.exp(val_loss))
+            final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
+            log_str += " | mean nnz %.2f | max nnz %.2f" % (sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100, max(final_eval_avg_nnzs)*100)
             logging(log_str)
             logging('-' * 100)
             # Save the model if the validation loss is the best we've seen so far.
@@ -551,7 +600,7 @@ with open(os.path.join(args.work_dir, 'model.pt'), 'rb') as f:
 para_model = model.to(device)
 
 # Run on test data.
-test_loss = evaluate(te_iter)
+test_loss, eval_avg_nnzs = evaluate(te_iter)
 logging('=' * 100)
 if args.dataset in ['enwik8', 'text8']:
     logging('| End of training | test loss {:5.2f} | test bpc {:9.5f}'.format(
@@ -559,4 +608,7 @@ if args.dataset in ['enwik8', 'text8']:
 else:
     logging('| End of training | test loss {:5.2f} | test ppl {:9.3f}'.format(
         test_loss, math.exp(test_loss)))
+
+final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
+logging(" | mean nnz %.2f | max nnz %.2f" % (sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100, max(final_eval_avg_nnzs)*100))
 logging('=' * 100)
