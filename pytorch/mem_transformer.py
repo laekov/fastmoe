@@ -30,6 +30,124 @@ class PositionalEmbedding(nn.Module):
         else:
             return pos_emb[:,None,:]
 
+class MoEPositionwiseFF(nn.Module):
+    def __init__(self, d_model, d_inner, dropout, pre_lnorm=False, top_k=64):
+        super(MoEPositionwiseFF, self).__init__()
+        print("MoEPositionwiseFF")
+
+        self.top_k = top_k
+        self.d_model = d_model
+        self.d_inner = d_inner
+        self.dropout = dropout
+
+        self.gate = nn.Linear(d_model, d_inner)
+
+        self.W2 = nn.Parameter(torch.Tensor(d_inner, d_model))
+        self.b2 = nn.Parameter(torch.Tensor(d_model))
+
+        self.layer_norm = nn.LayerNorm(d_model)
+
+        self.pre_lnorm = pre_lnorm
+
+        ratio = top_k / d_inner
+        self.dropout_middle = nn.Dropout(dropout * ratio)
+        self.dropout_final = nn.Dropout(dropout)
+
+        self.reset_parameter()
+
+    def reset_parameter(self):
+        temp_Linear = nn.Linear(self.d_inner, self.d_model)
+        self.W2.data = temp_Linear.weight.data.transpose(0, 1)
+        self.b2.data = temp_Linear.bias.data
+
+    def forward(self, inp):
+        residual = inp
+        if self.pre_lnorm:
+            inp = self.layer_norm(inp)
+
+        gate = self.gate(inp)
+        gate_top_k_val, gate_top_k_idx = torch.topk(gate, k=self.top_k, dim=-1, largest=True, sorted=False) # [.. x top_k]
+        relu_out = F.relu(gate_top_k_val)
+
+        x = self.dropout_middle(relu_out)
+
+        W2_select = self.W2[gate_top_k_idx] # [.. x top_k x d_model]
+        core_out = torch.einsum('ijk,ijkd->ijd', (x, W2_select)) + self.b2 # [.. x d_model]
+        core_out = self.dropout_final(core_out)
+
+        output = core_out + residual
+        if not self.pre_lnorm:
+            output = self.layer_norm(output)
+
+        return output
+        #  return output, relu_out.detach()
+
+
+class MultiHeadPositionwiseFF(nn.Module):
+    def __init__(self, d_model, d_inner, dropout, pre_lnorm=False, n_head=2):
+        super(MultiHeadPositionwiseFF, self).__init__()
+        print("MultiHeadPositionwiseFF")
+
+        assert d_model % n_head == 0
+        self.n_head = n_head
+        d_head = d_model / n_head
+        self.d_head = d_head
+        self.d_model = d_model
+        self.d_inner = d_inner
+        self.dropout = dropout
+
+        self.q_net = nn.Linear(d_model, d_model)
+
+        self.k_weight = nn.Parameter(torch.Tensor(n_head, d_inner, d_head))
+        self.k_bias = nn.Parameter(torch.Tensor(n_head, d_inner))
+
+        self.v_weight = nn.Parameter(torch.Tensor(n_head, d_head, d_inner))
+        self.v_bias = nn.Parameter(torch.Tensor(n_head, d_head))
+
+        self.o_net = nn.Linear(d_model, d_model)
+
+        self.layer_norm = nn.LayerNorm(d_model)
+
+        self.pre_lnorm = pre_lnorm
+
+        self.dropout = nn.Dropout(dropout)
+
+        self.reset_parameter()
+
+    def reset_parameter(self):
+        for i in range(self.n_head):
+            tmp = nn.Linear(self.d_head, self.d_inner)
+            self.k_weight.data[i] = tmp.weight.data
+            self.k_bias.data[i] = tmp.bias.data
+
+            tmp = nn.Linear(self.d_inner, self.d_head)
+            self.v_weight.data[i] = tmp.weight.data
+            self.v_bias.data[i] = tmp.bias.data
+
+    def forward(self, inp):
+        residual = inp
+        if self.pre_lnorm:
+            inp = self.layer_norm(inp)
+
+        head_q = self.q_net(inp)
+        head_q = head_q.view(inp.size(0), inp.size(1), self.n_head, self.d_head) # [.. x n_head x d_head]
+
+        attn_score = torch.einsum('ibnd,nhd->ibnh', (head_q, self.k_weight)) + self.k_bias # [.. x n_head x d_inner]
+        attn_score = F.relu(attn_score)
+        attn_score = self.dropout(attn_score)
+
+        attn_vec = torch.einsum('ibnh,ndh->ibnd', (attn_score, self.v_weight)) + self.v_bias
+
+        attn_vec = attn_vec.view(inp.size(0), inp.size(1), self.d_model)
+        core_out = self.o_net(attn_vec)
+        core_out = self.dropout(core_out)
+
+        output = core_out + residual
+        if not self.pre_lnorm:
+            output = self.layer_norm(output)
+
+        return output
+
 
 class PositionwiseFF(nn.Module):
     def __init__(self, d_model, d_inner, dropout, pre_lnorm=False):
@@ -69,7 +187,8 @@ class PositionwiseFF(nn.Module):
             ##### residual connection + layer normalization
             output = self.layer_norm(inp + core_out)
 
-        return output, relu_out.detach()
+        return output
+        #  return output, relu_out.detach()
 
 class ExtendedMultiHeadAttn(nn.Module):
     def __init__(self, n_head, d_model, d_head, dropout, dropatt=0,
@@ -125,14 +244,14 @@ class ExtendedMultiHeadAttn(nn.Module):
         attn_score.mul_(self.scale)
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
-                attn_score[mem_len:].masked_fill_(attn_mask[None,:,:,None], -float('inf'))
+                attn_score[mem_len:].masked_fill_(attn_mask[None,:,:,None].bool(), -float('inf'))
             elif attn_mask.dim() == 3:
-                attn_score[mem_len:].masked_fill_(attn_mask[:,:,:,None], -float('inf'))
+                attn_score[mem_len:].masked_fill_(attn_mask[:,:,:,None].bool(), -float('inf'))
 
 
         mem2other_attn = attn_mask.new_ones(mem_len, c.size(0))
         mem2other_attn[:, :mem_len] = 0
-        attn_score[:mem_len].masked_fill_(mem2other_attn[:, :, None, None], -float('inf'))
+        attn_score[:mem_len].masked_fill_(mem2other_attn[:, :, None, None].bool(), -float('inf'))
 
         # [qlen x klen x bsz x n_head]
         attn_prob = F.softmax(attn_score, dim=1)
@@ -211,9 +330,9 @@ class MultiHeadAttn(nn.Module):
         attn_score.mul_(self.scale)
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
-                attn_score.masked_fill_(attn_mask[None,:,:,None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[None,:,:,None].bool(), -float('inf'))
             elif attn_mask.dim() == 3:
-                attn_score.masked_fill_(attn_mask[:,:,:,None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[:,:,:,None].bool(), -float('inf'))
 
         # [qlen x klen x bsz x n_head]
         attn_prob = F.softmax(attn_score, dim=1)
@@ -358,10 +477,10 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
                 attn_score = attn_score.float().masked_fill(
-                    attn_mask[None,:,:,None], -float('inf')).type_as(attn_score)
+                    attn_mask[None,:,:,None].bool(), -float('inf')).type_as(attn_score)
             elif attn_mask.dim() == 3:
                 attn_score = attn_score.float().masked_fill(
-                    attn_mask[:,:,:,None], -float('inf')).type_as(attn_score)
+                    attn_mask[:,:,:,None].bool(), -float('inf')).type_as(attn_score)
 
         # [qlen x klen x bsz x n_head]
         attn_prob = F.softmax(attn_score, dim=1)
@@ -444,9 +563,9 @@ class RelLearnableMultiHeadAttn(RelMultiHeadAttn):
         #### compute attention probability
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
-                attn_score.masked_fill_(attn_mask[None,:,:,None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[None,:,:,None].bool(), -float('inf'))
             elif attn_mask.dim() == 3:
-                attn_score.masked_fill_(attn_mask[:,:,:,None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[:,:,:,None].bool(), -float('inf'))
 
         # [qlen x klen x bsz x n_head]
         attn_prob = F.softmax(attn_score, dim=1)
@@ -478,16 +597,18 @@ class DecoderLayer(nn.Module):
 
         self.dec_attn = MultiHeadAttn(n_head, d_model, d_head, dropout, **kwargs)
         #  self.dec_attn = ExtendedMultiHeadAttn(n_head, d_model, d_head, dropout, **kwargs)
-        self.pos_ff = PositionwiseFF(d_model, d_inner, dropout,
+        self.pos_ff = MultiHeadPositionwiseFF(d_model, d_inner, dropout,
                                      pre_lnorm=kwargs.get('pre_lnorm'))
 
     def forward(self, dec_inp, dec_attn_mask=None, mems=None):
 
         output = self.dec_attn(dec_inp, attn_mask=dec_attn_mask,
                                mems=mems)
-        output, relu_out = self.pos_ff(output)
+        output = self.pos_ff(output)
+        #  output, relu_out = self.pos_ff(output)
 
-        return output, relu_out
+        return output
+        #  return output, relu_out
 
 class RelLearnableDecoderLayer(nn.Module):
     def __init__(self, n_head, d_model, d_head, d_inner, dropout,
@@ -496,7 +617,7 @@ class RelLearnableDecoderLayer(nn.Module):
 
         self.dec_attn = RelLearnableMultiHeadAttn(n_head, d_model, d_head, dropout,
                                          **kwargs)
-        self.pos_ff = PositionwiseFF(d_model, d_inner, dropout,
+        self.pos_ff = MultiHeadPositionwiseFF(d_model, d_inner, dropout,
                                      pre_lnorm=kwargs.get('pre_lnorm'))
 
     def forward(self, dec_inp, r_emb, r_w_bias, r_bias, dec_attn_mask=None, mems=None):
@@ -504,9 +625,11 @@ class RelLearnableDecoderLayer(nn.Module):
         output = self.dec_attn(dec_inp, r_emb, r_w_bias, r_bias,
                                attn_mask=dec_attn_mask,
                                mems=mems)
-        output, relu_out = self.pos_ff(output)
+        output = self.pos_ff(output)
+        #  output, relu_out = self.pos_ff(output)
 
-        return output, relu_out
+        return output
+        #  return output, relu_out
 
 class RelPartialLearnableDecoderLayer(nn.Module):
     def __init__(self, n_head, d_model, d_head, d_inner, dropout,
@@ -515,7 +638,7 @@ class RelPartialLearnableDecoderLayer(nn.Module):
 
         self.dec_attn = RelPartialLearnableMultiHeadAttn(n_head, d_model,
                             d_head, dropout, **kwargs)
-        self.pos_ff = PositionwiseFF(d_model, d_inner, dropout,
+        self.pos_ff = MultiHeadPositionwiseFF(d_model, d_inner, dropout,
                                      pre_lnorm=kwargs.get('pre_lnorm'))
 
     def forward(self, dec_inp, r, r_w_bias, r_r_bias, dec_attn_mask=None, mems=None):
@@ -523,9 +646,11 @@ class RelPartialLearnableDecoderLayer(nn.Module):
         output = self.dec_attn(dec_inp, r, r_w_bias, r_r_bias,
                                attn_mask=dec_attn_mask,
                                mems=mems)
-        output, relu_out = self.pos_ff(output)
+        output = self.pos_ff(output)
+        #  output, relu_out = self.pos_ff(output)
 
-        return output, relu_out
+        return output
+        #  return output, relu_out
 
 
 class AdaptiveEmbedding(nn.Module):
@@ -758,7 +883,7 @@ class MemTransformerLM(nn.Module):
                 word_emb.new_ones(qlen, klen), diagonal=1+mlen).byte()[:,:,None]
 
         hids = []
-        relu_outs = []
+        #  relu_outs = []
         if self.attn_type == 0: # default
             pos_seq = torch.arange(klen-1, -1, -1.0, device=word_emb.device,
                                    dtype=word_emb.dtype)
@@ -772,10 +897,11 @@ class MemTransformerLM(nn.Module):
             hids.append(core_out)
             for i, layer in enumerate(self.layers):
                 mems_i = None if mems is None else mems[i]
-                core_out, relu_out = layer(core_out, pos_emb, self.r_w_bias,
+                #  core_out, relu_out = layer(core_out, pos_emb, self.r_w_bias,
+                core_out = layer(core_out, pos_emb, self.r_w_bias,
                         self.r_r_bias, dec_attn_mask=dec_attn_mask, mems=mems_i)
                 hids.append(core_out)
-                relu_outs.append(relu_out)
+                #  relu_outs.append(relu_out)
         elif self.attn_type == 1: # learnable
             core_out = self.drop(word_emb)
             hids.append(core_out)
@@ -787,10 +913,11 @@ class MemTransformerLM(nn.Module):
                     r_emb, r_bias = self.r_emb[i], self.r_bias[i]
 
                 mems_i = None if mems is None else mems[i]
-                core_out, relu_out = layer(core_out, r_emb, self.r_w_bias[i],
+                #  core_out, relu_out = layer(core_out, r_emb, self.r_w_bias[i],
+                core_out = layer(core_out, r_emb, self.r_w_bias[i],
                         r_bias, dec_attn_mask=dec_attn_mask, mems=mems_i)
                 hids.append(core_out)
-                relu_outs.append(relu_out)
+                #  relu_outs.append(relu_out)
         elif self.attn_type == 2: # absolute
             pos_seq = torch.arange(klen - 1, -1, -1.0, device=word_emb.device,
                                    dtype=word_emb.dtype)
@@ -805,10 +932,11 @@ class MemTransformerLM(nn.Module):
                 mems_i = None if mems is None else mems[i]
                 if mems_i is not None and i == 0:
                     mems_i += pos_emb[:mlen]
-                core_out, relu_out = layer(core_out, dec_attn_mask=dec_attn_mask,
+                #  core_out, relu_out = layer(core_out, dec_attn_mask=dec_attn_mask,
+                core_out = layer(core_out, dec_attn_mask=dec_attn_mask,
                                  mems=mems_i)
                 hids.append(core_out)
-                relu_outs.append(relu_out)
+                #  relu_outs.append(relu_out)
         elif self.attn_type == 3:
             core_out = self.drop(word_emb)
 
@@ -826,16 +954,18 @@ class MemTransformerLM(nn.Module):
                     mems_i += cur_emb.view(mlen, 1, -1)
                 core_out += self.r_emb[i][-qlen:].view(qlen, 1, -1)
 
-                core_out, relu_out = layer(core_out, dec_attn_mask=dec_attn_mask,
+                #  core_out, relu_out = layer(core_out, dec_attn_mask=dec_attn_mask,
+                core_out = layer(core_out, dec_attn_mask=dec_attn_mask,
                                  mems=mems_i)
                 hids.append(core_out)
-                relu_outs.append(relu_out)
+                #  relu_outs.append(relu_out)
 
         core_out = self.drop(core_out)
 
         new_mems = self._update_mems(hids, mems, mlen, qlen)
 
-        return core_out, new_mems, relu_outs
+        return core_out, new_mems
+        #  return core_out, new_mems, relu_outs
 
     def forward(self, data, target, *mems):
         # nn.DataParallel does not allow size(0) tensors to be broadcasted.
@@ -845,7 +975,8 @@ class MemTransformerLM(nn.Module):
         if not mems: mems = self.init_mems()
 
         tgt_len = target.size(0)
-        hidden, new_mems, relu_outs = self._forward(data, mems=mems)
+        hidden, new_mems = self._forward(data, mems=mems)
+        #  hidden, new_mems, relu_outs = self._forward(data, mems=mems)
 
         #  relu_outs = torch.cat([relu_out.unsqueeze(-1) for relu_out in relu_outs], dim=-1)
 
@@ -860,9 +991,11 @@ class MemTransformerLM(nn.Module):
             loss = loss.view(tgt_len, -1)
 
         if new_mems is None:
-            return [relu_outs, loss]
+            return [loss]
+            #  return [relu_outs, loss]
         else:
-            return [relu_outs, loss] + new_mems
+            return [loss] + new_mems
+            #  return [relu_outs, loss] + new_mems
 
 if __name__ == '__main__':
     import argparse

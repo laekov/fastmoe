@@ -4,6 +4,7 @@ import time
 import math
 import os, sys
 import itertools
+import pathlib
 
 import numpy as np
 
@@ -411,7 +412,9 @@ logging('#non emb params = {}'.format(args.n_nonemb_param))
 def evaluate(eval_iter):
     # Turn on evaluation mode which disables dropout.
     model.eval()
-    avg_nnzs = None
+    #  avg_nnzs = None
+    #  act_hist = None
+    #  co_act_hist = None
 
     # If the model does not use memory at all, make the ext_len longer.
     # Otherwise, make the mem_len longer and keep the ext_len the same.
@@ -430,22 +433,34 @@ def evaluate(eval_iter):
             if args.max_eval_steps > 0 and i >= args.max_eval_steps:
                 break
             ret = model(data, target, *mems)
-            #  loss, mems = ret[0], ret[1:]
-            relu_outs, loss, mems = ret[0], ret[1], ret[2:]
+            loss, mems = ret[0], ret[1:]
+            #  relu_outs, loss, mems = ret[0], ret[1], ret[2:]
             loss = loss.mean()
             total_loss += seq_len * loss.float().item()
             total_len += seq_len
-            nnzs = [(relu_out > 0).sum().float().item() / relu_out.numel() for relu_out in relu_outs]
-            if avg_nnzs is None:
-                avg_nnzs = [AverageMeter() for i in range(len(nnzs))]
-            for i in range(len(nnzs)):
-                avg_nnzs[i].update(nnzs[i])
+
+            #  acts = [(relu_out > 0).float().cpu() for relu_out in relu_outs]
+            #  if avg_nnzs is None:
+            #      n_layer = len(acts)
+            #      avg_nnzs = [AverageMeter() for i in range(n_layer)]
+            #      d_inner = acts[0].size(-1)
+            #      act_hist = [torch.zeros(d_inner) for i in range(n_layer)]
+            #      co_act_hist = [torch.zeros(d_inner, d_inner) for i in range(n_layer)]
+
+            #  for i, act in enumerate(acts):
+            #      nnz = act.sum().item() / act.numel()
+            #      avg_nnzs[i].update(nnz)
+            #      act_hist[i] += torch.sum(act, dim=[0, 1])
+            #      co_act = torch.einsum("ija,ijb->ab", (act, act))
+            #      co_act_hist[i] += co_act
+
 
     # Switch back to the training mode
     model.reset_length(args.tgt_len, args.ext_len, args.mem_len)
     model.train()
 
-    return total_loss / total_len, avg_nnzs
+    return total_loss / total_len
+    #  return total_loss / total_len, avg_nnzs, act_hist, co_act_hist
 
 
 def train():
@@ -457,7 +472,9 @@ def train():
     else:
         mems = tuple()
 
-    avg_nnzs = None
+    #  avg_nnzs = None
+    #  act_hist = None
+    #  co_act_hist = None
 
     train_iter = tr_iter.get_varlen_iter() if args.varlen else tr_iter
     for batch, (data, target, seq_len) in enumerate(train_iter):
@@ -469,8 +486,8 @@ def train():
                 data_i = data_chunks[i].contiguous()
                 target_i = target_chunks[i].contiguous()
                 ret = para_model(data_i, target_i, *mems[i])
-                #  loss, mems[i] = ret[0], ret[1:]
-                relu_outs, loss, mems[i] = ret[0], ret[1], ret[2:]
+                loss, mems[i] = ret[0], ret[1:]
+                #  relu_outs, loss, mems[i] = ret[0], ret[1], ret[2:]
                 loss = loss.float().mean().type_as(loss) / args.batch_chunk
                 if args.fp16:
                     optimizer.backward(loss)
@@ -479,19 +496,29 @@ def train():
                 train_loss += loss.float().item()
         else:
             ret = para_model(data, target, *mems)
-            #  loss, mems = ret[0], ret[1:]
-            relu_outs, loss, mems = ret[0], ret[1], ret[2:]
+            loss, mems = ret[0], ret[1:]
+            #  relu_outs, loss, mems = ret[0], ret[1], ret[2:]
             loss = loss.float().mean().type_as(loss)
             if args.fp16:
                 optimizer.backward(loss)
             else:
                 loss.backward()
             train_loss += loss.float().item()
-        nnzs = [(relu_out > 0).sum().float().item() / relu_out.numel() for relu_out in relu_outs]
-        if avg_nnzs is None:
-            avg_nnzs = [AverageMeter() for i in range(len(nnzs))]
-        for i in range(len(nnzs)):
-            avg_nnzs[i].update(nnzs[i])
+        #  acts = [(relu_out > 0).float().cpu() for relu_out in relu_outs]
+        #  #  nnzs = [act.sum().item() / act.numel() for act in acts]
+        #  if avg_nnzs is None:
+        #      n_layer = len(acts)
+        #      avg_nnzs = [AverageMeter() for i in range(n_layer)]
+        #      d_inner = acts[0].size(-1)
+        #      act_hist = [torch.zeros(d_inner) for i in range(n_layer)]
+        #      co_act_hist = [torch.zeros(d_inner, d_inner) for i in range(n_layer)]
+
+        #  for i, act in enumerate(acts):
+        #      nnz = act.sum().item() / act.numel()
+        #      avg_nnzs[i].update(nnz)
+        #      act_hist[i] += torch.sum(act, dim=[0, 1])
+        #      co_act = torch.einsum("ija,ijb->ab", (act, act))
+        #      co_act_hist[i] += co_act
 
         if args.fp16:
             optimizer.clip_master_grads(args.clip)
@@ -530,17 +557,39 @@ def train():
                 log_str += ' | bpc {:9.5f}'.format(cur_loss / math.log(2))
             else:
                 log_str += ' | ppl {:9.3f}'.format(math.exp(cur_loss))
-            final_avg_nnzs = [avg_nnzs[i].avg for i in range(len(avg_nnzs))]
-            for i in range(len(avg_nnzs)):
-                avg_nnzs[i].reset()
-            log_str += " | avg nnz %.2f | max nnz %.2f" % (sum(final_avg_nnzs)/len(final_avg_nnzs)*100, max(final_avg_nnzs)*100)
-
+            #  final_avg_nnzs = [avg_nnzs[i].avg for i in range(len(avg_nnzs))]
+            #  log_str += ' | avgnnz {:5.2f} | maxnnz {:5.2f}'.format(
+            #          sum(final_avg_nnzs)/len(final_avg_nnzs)*100,
+            #          max(final_avg_nnzs)*100,
+            #          )
             logging(log_str)
+
+            #  co_act_dir = pathlib.Path(logging.keywords['log_path']).parent.joinpath("co_act")
+            #  co_act_dir.mkdir(parents=True, exist_ok=True)
+            #  co_act_path = co_act_dir.joinpath('epoch_%d_train_step_%d.pt' % (epoch, train_step))
+            #  torch.save(co_act_hist, co_act_path)
+            #  for i in range(len(avg_nnzs)):
+            #      avg_nnzs[i].reset()
+            #      act_hist[i] /= act_hist[i].sum()
+            #      prob, index = torch.topk(act_hist[i], min(1024, act_hist[i].size(-1)))
+            #      log_str = '| layer {:2d} | top 64 prob {:3.2f} | top 128 prob {:3.2f} | top 256 prob {:3.2f} | top 512 prob {:3.2f} | top 1024 prob {:3.2f}'.format(
+            #              i+1,
+            #              prob[:64].sum().item(),
+            #              prob[:128].sum().item(),
+            #              prob[:256].sum().item(),
+            #              prob[:512].sum().item(),
+            #              prob[:1024].sum().item()
+            #              )
+            #      logging(log_str)
+            #      act_hist[i] = 0.
+            #      co_act_hist[i] = 0.
+
             train_loss = 0
             log_start_time = time.time()
 
         if train_step % args.eval_interval == 0:
-            val_loss, eval_avg_nnzs = evaluate(va_iter)
+            val_loss = evaluate(va_iter)
+            #  val_loss, eval_avg_nnzs, eval_act_hist, eval_co_act_hist = evaluate(va_iter)
             logging('-' * 100)
             log_str = '| Eval {:3d} at step {:>8d} | time: {:5.2f}s ' \
                       '| valid loss {:5.2f}'.format(
@@ -550,8 +599,11 @@ def train():
                 log_str += ' | bpc {:9.5f}'.format(val_loss / math.log(2))
             else:
                 log_str += ' | valid ppl {:9.3f}'.format(math.exp(val_loss))
-            final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
-            log_str += " | mean nnz %.2f | max nnz %.2f" % (sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100, max(final_eval_avg_nnzs)*100)
+            #  final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
+            #  log_str += ' | avgnnz {:5.2f} | maxnnz {:5.2f}'.format(
+            #          sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100,
+            #          max(final_eval_avg_nnzs)*100
+            #          )
             logging(log_str)
             logging('-' * 100)
             # Save the model if the validation loss is the best we've seen so far.
@@ -600,7 +652,8 @@ with open(os.path.join(args.work_dir, 'model.pt'), 'rb') as f:
 para_model = model.to(device)
 
 # Run on test data.
-test_loss, eval_avg_nnzs = evaluate(te_iter)
+test_loss = evaluate(te_iter)
+#  test_loss, eval_avg_nnzs, eval_act_hist, eval_co_act_hist = evaluate(te_iter)
 logging('=' * 100)
 if args.dataset in ['enwik8', 'text8']:
     logging('| End of training | test loss {:5.2f} | test bpc {:9.5f}'.format(
@@ -609,6 +662,10 @@ else:
     logging('| End of training | test loss {:5.2f} | test ppl {:9.3f}'.format(
         test_loss, math.exp(test_loss)))
 
-final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
-logging(" | mean nnz %.2f | max nnz %.2f" % (sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100, max(final_eval_avg_nnzs)*100))
+#  final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
+#  log_str = ' | avgnnz {:5.2f} | maxnnz {:5.2f}'.format(
+#          sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100,
+#          max(final_eval_avg_nnzs)*100
+#          )
+#  logging(log_str)
 logging('=' * 100)
