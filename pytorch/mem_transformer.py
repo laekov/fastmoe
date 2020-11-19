@@ -96,7 +96,7 @@ class MultiHeadPositionwiseFF(nn.Module):
         self.d_inner = d_inner
         self.dropout = dropout
 
-        self.q_net = nn.Linear(d_model, d_model)
+        #self.q_net = nn.Linear(d_model, d_model)
 
         self.k_weight = nn.Parameter(torch.Tensor(n_head, d_inner, d_head))
         self.k_bias = nn.Parameter(torch.Tensor(n_head, d_inner))
@@ -104,7 +104,7 @@ class MultiHeadPositionwiseFF(nn.Module):
         self.v_weight = nn.Parameter(torch.Tensor(n_head, d_head, d_inner))
         self.v_bias = nn.Parameter(torch.Tensor(n_head, d_head))
 
-        self.o_net = nn.Linear(d_model, d_model)
+        #self.o_net = nn.Linear(d_model, d_model)
 
         self.layer_norm = nn.LayerNorm(d_model)
 
@@ -129,8 +129,8 @@ class MultiHeadPositionwiseFF(nn.Module):
         if self.pre_lnorm:
             inp = self.layer_norm(inp)
 
-        head_q = self.q_net(inp)
-        head_q = head_q.view(inp.size(0), inp.size(1), self.n_head, self.d_head) # [.. x n_head x d_head]
+        # head_q = self.q_net(inp)
+        head_q = inp.view(inp.size(0), inp.size(1), self.n_head, self.d_head) # [.. x n_head x d_head]
 
         attn_score = torch.einsum('ibnd,nhd->ibnh', (head_q, self.k_weight)) + self.k_bias # [.. x n_head x d_inner]
         attn_score = F.relu(attn_score)
@@ -139,8 +139,8 @@ class MultiHeadPositionwiseFF(nn.Module):
         attn_vec = torch.einsum('ibnh,ndh->ibnd', (attn_score, self.v_weight)) + self.v_bias
 
         attn_vec = attn_vec.contiguous().view(inp.size(0), inp.size(1), self.d_model)
-        core_out = self.o_net(attn_vec)
-        core_out = self.dropout(core_out)
+        # core_out = self.o_net(attn_vec)
+        core_out = self.dropout(attn_vec)
 
         output = core_out + residual
         if not self.pre_lnorm:
