@@ -120,6 +120,7 @@ class SparsePositionwiseFF(nn.Module):
         relu_out = self.CoreNet_1(inp).view(-1, self.d_inner)
         sparse_relu_out = torch_sparse.SparseTensor.from_dense(relu_out)
         core_out = torch_sparse.matmul(sparse_relu_out, self.W2) + self.b2
+        core_out = core_out.view(inp.size(0), inp.size(1), self.d_model)
         core_out = self.dropout_final(core_out)
 
         output = core_out + residual
