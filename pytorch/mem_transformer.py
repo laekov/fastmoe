@@ -98,7 +98,7 @@ class HierarchicalMoEPositionwiseFF(nn.Module):
         self.d_inner = d_inner
         self.dropout = dropout
 
-        self.block_net = nn.Linear(n_block, d_inner)
+        self.block_net = nn.Linear(d_model, n_block)
 
         self.W1 = nn.Parameter(torch.Tensor(n_block, d_block, d_model))
         self.b1 = nn.Parameter(torch.Tensor(n_block, d_block))
