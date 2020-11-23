@@ -88,7 +88,7 @@ class HierarchicalMoEPositionwiseFF(nn.Module):
         super(HierarchicalMoEPositionwiseFF, self).__init__()
         print("HierarchicalMoEPositionwiseFF")
 
-        assert self.d_inner % n_block == 0
+        assert d_inner % n_block == 0
         self.top_block = top_block
         self.n_block = n_block
 
