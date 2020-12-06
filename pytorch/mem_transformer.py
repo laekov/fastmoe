@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_sparse
+#  import torch_sparse
 
 sys.path.append('utils')
 from proj_adaptive_softmax import ProjectedAdaptiveLogSoftmax
