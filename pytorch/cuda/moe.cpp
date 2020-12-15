@@ -11,10 +11,10 @@
                                                                                                                             
 // CUDA and CUBLAS functions                                                                                              
 //#include <helper_functions.h>                                                                                             
-//#include <helper_cuda.h> 
+#include <helper_cuda.h> 
 
 
-const int num_stream=1024;
+const int num_stream=16;
 
 // std::vector<torch::Tensor> 
 void moe_cuda_forward(
@@ -28,14 +28,17 @@ void moe_cuda_forward(
     const auto d_model = weight.size(1);
     const auto d_ffn = weight.size(2);
     auto output = input.new_zeros({batch_size, num_expert, d_ffn});
+    std::cout << output << std::endl;
+    
 
     cublasHandle_t handle;
-    cublasCreate(&handle);
-
+    checkCudaErrors(cublasCreate(&handle));
+    
     cudaStream_t stream[num_stream];
     for (size_t i=0; i<num_stream; ++i) {
-        cudaStreamCreate(&stream[i]);
+        checkCudaErrors(cudaStreamCreate(&stream[i]));
     }
+
     
     size_t s;
     for (size_t i=0; i<batch_size; ++i) {
@@ -43,33 +46,42 @@ void moe_cuda_forward(
             s = (i * num_expert + j) % num_stream;
             printf("i=%d j=%d goes to stream %d\n", i, j, s);
             cublasSetStream(handle, stream[s]);
-            if (input.scalar_type() == torch::ScalarType::Double) {
-                double alpha = 1.0;
-                double beta = 0.0;
-                cublasDgemm(handle, 
+            if (input.scalar_type() == torch::ScalarType::Float) {
+                float alpha = 1.0;
+                float beta = 0.0;
+                std::cout << input[i] << std::endl;
+                std::cout << weight.index(gate[i][j]) << std::endl;
+                std::cout << output[i][j] << std::endl;
+                cublasSgemm(handle, 
                     CUBLAS_OP_N, 
                     CUBLAS_OP_N,
-                    1,
-                    d_ffn,
-                    d_model,
+                    1, // m
+                    d_ffn, // n
+                    d_model, // k
                     &alpha,
-                    input[i].data_ptr<double>(),
+                    input.data_ptr<float>() + i * d_model,
+                    // input[i].data_ptr<float>(),
                     1,
-                    weight.index(gate[i][j]).data_ptr<double>(),
+                    weight.index(gate[i][j]).data_ptr<float>(),
                     d_model,
                     &beta,
-                    output[i][j].data_ptr<double>(),
+                    output.data_ptr<float>() + i * num_expert * d_ffn + j * d_ffn,
                     1);
             } else {
-                printf("only support double!!!\n");
+                printf("only support float!!!\n");
             }
-            
         }
     }
+    cudaDeviceSynchronize();
+    printf("synchronized\n");
+    
 
+    
     for (size_t i=0; i<num_stream; ++i) {
         cudaStreamDestroy(stream[i]);
     }
+    std::cout << output << std::endl;
+    
     cublasDestroy(handle);
 }
 
@@ -83,10 +95,11 @@ void moe_cuda_forward(
 
 
 int main() {
-    torch::Tensor input = torch::randn({2, 4}, torch::dtype(torch::kFloat64).device(torch::kCUDA, 3));
-    torch::Tensor gate = torch::ones({2, 1}, torch::dtype(torch::kInt64).device(torch::kCUDA, 3));
-    torch::Tensor weight = torch::randn({2, 4, 4}, torch::dtype(torch::kFloat64).device(torch::kCUDA, 3));
-    torch::Tensor bias = torch::randn({2, 4}, torch::dtype(torch::kFloat64).device(torch::kCUDA, 3));
+    int device=2;
+    torch::Tensor input = torch::randn({2, 4}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
+    torch::Tensor gate = torch::zeros({2, 1}, torch::dtype(torch::kInt64).device(torch::kCUDA, device));
+    torch::Tensor weight = torch::randn({2, 4, 4}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
+    torch::Tensor bias = torch::randn({2, 4}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
     std::cout << input << std::endl;
     moe_cuda_forward(input, gate, weight, bias);
 }
