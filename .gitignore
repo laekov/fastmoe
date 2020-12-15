@@ -1,4 +1,4 @@
 *.pyc
 data/
-libtorch-shared-with-deps-1.4.0.zip
-libtorch-shared-with-deps-1.4.0/
+libtorch-shared-with-deps-*
+pytorch/cuda/build
