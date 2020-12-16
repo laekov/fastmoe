@@ -4,8 +4,8 @@ project(moe)
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
-include_directories("/home/jiezhong/anaconda3/envs/torch/include/python3.6m"
-                   "/usr/local/cuda-/include"
+include_directories("/home/jiezhong/miniconda3/include/python3.8"
+                   "/usr/local/cuda/include"
                    "/usr/local/cuda/samples/common/inc")
 add_executable(moe moe.cpp)
 target_link_libraries(moe 

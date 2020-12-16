@@ -14,7 +14,7 @@
 #include <helper_cuda.h> 
 
 
-const int num_stream=16;
+const int num_stream=512;
 
 // std::vector<torch::Tensor> 
 void moe_cuda_forward(
@@ -27,8 +27,8 @@ void moe_cuda_forward(
     const auto num_expert = gate.size(1);
     const auto d_model = weight.size(1);
     const auto d_ffn = weight.size(2);
+    printf("b=%d, expert=%d, d_model=%d, d_ffn=%d\n", batch_size, num_expert, d_model, d_ffn);
     auto output = input.new_zeros({batch_size, num_expert, d_ffn});
-    std::cout << output << std::endl;
     
 
     cublasHandle_t handle;
@@ -39,50 +39,66 @@ void moe_cuda_forward(
         checkCudaErrors(cudaStreamCreate(&stream[i]));
     }
 
+    cudaEvent_t start, stop;
+    checkCudaErrors(cudaEventCreate(&start));
+    checkCudaErrors(cudaEventCreate(&stop));
+    // Record the start event
+    checkCudaErrors(cudaEventRecord(start, NULL));
     
     size_t s;
     for (size_t i=0; i<batch_size; ++i) {
         for (size_t j=0; j<num_expert; ++j) {
             s = (i * num_expert + j) % num_stream;
-            printf("i=%d j=%d goes to stream %d\n", i, j, s);
-            cublasSetStream(handle, stream[s]);
+            // printf("i=%d j=%d goes to stream %d\n", i, j, s);
+            checkCudaErrors(cublasSetStream(handle, stream[s]));
             if (input.scalar_type() == torch::ScalarType::Float) {
                 float alpha = 1.0;
                 float beta = 0.0;
-                std::cout << input[i] << std::endl;
-                std::cout << weight.index(gate[i][j]) << std::endl;
-                std::cout << output[i][j] << std::endl;
-                cublasSgemm(handle, 
+                checkCudaErrors(cublasSgemm(handle, 
                     CUBLAS_OP_N, 
                     CUBLAS_OP_N,
                     1, // m
                     d_ffn, // n
                     d_model, // k
                     &alpha,
-                    input.data_ptr<float>() + i * d_model,
-                    // input[i].data_ptr<float>(),
+                    input[i].data_ptr<float>(),
                     1,
                     weight.index(gate[i][j]).data_ptr<float>(),
                     d_model,
                     &beta,
-                    output.data_ptr<float>() + i * num_expert * d_ffn + j * d_ffn,
-                    1);
+                    output[i][j].data_ptr<float>(),
+                    1));
             } else {
                 printf("only support float!!!\n");
             }
         }
     }
-    cudaDeviceSynchronize();
-    printf("synchronized\n");
-    
+    // checkCudaErrors(cudaDeviceSynchronize());
+    // Record the stop event
+    checkCudaErrors(cudaEventRecord(stop, NULL));
 
+    // Wait for the stop event to complete
+    checkCudaErrors(cudaEventSynchronize(stop));
+
+    float msecTotal = 0.0f;
+    checkCudaErrors(cudaEventElapsedTime(&msecTotal, start, stop));
+
+    // Compute and print the performance
+    float msecPerMatrixMul = msecTotal / batch_size / num_expert;
+    double flopsPerMatrixMul = 2.0 * (double)d_model * (double)d_ffn;
+    double gigaFlops = (flopsPerMatrixMul * 1.0e-9f) / (msecPerMatrixMul / 1000.0f);
+        printf(
+            "Performance= %.2f GFlop/s, Time= %.3f msec, Size= %.0f Ops\n",
+            gigaFlops,
+            msecPerMatrixMul,
+            flopsPerMatrixMul);
+
+    // std::cout << output << std::endl;
     
     for (size_t i=0; i<num_stream; ++i) {
-        cudaStreamDestroy(stream[i]);
+        checkCudaErrors(cudaStreamDestroy(stream[i]));
     }
-    std::cout << output << std::endl;
-    
-    cublasDestroy(handle);
+    checkCudaErrors(cublasDestroy(handle));
 }
 
 
@@ -96,10 +112,10 @@ void moe_cuda_forward(
 
 int main() {
     int device=2;
-    torch::Tensor input = torch::randn({2, 4}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
-    torch::Tensor gate = torch::zeros({2, 1}, torch::dtype(torch::kInt64).device(torch::kCUDA, device));
-    torch::Tensor weight = torch::randn({2, 4, 4}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
-    torch::Tensor bias = torch::randn({2, 4}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
-    std::cout << input << std::endl;
+    torch::Tensor input = torch::randn({2048, 512}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
+    torch::Tensor gate = torch::zeros({2048, 2}, torch::dtype(torch::kInt64).device(torch::kCUDA, device));
+    torch::Tensor weight = torch::randn({2, 512, 2048}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
+    torch::Tensor bias = torch::randn({2, 2048}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
+    checkCudaErrors(cudaSetDevice(device));
     moe_cuda_forward(input, gate, weight, bias);
 }
