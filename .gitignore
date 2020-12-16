@@ -2,3 +2,4 @@
 data/
 libtorch-shared-with-deps-*
 pytorch/cuda/build
+exp/
