@@ -75,7 +75,7 @@ inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
 }
 
 template <typename scalar_t>
-void moe_cuda_forward_impl(
+void moe_first_linear_cuda_forward(
         const scalar_t* input,
         const size_t* gate,
         const scalar_t* weight,
@@ -155,11 +155,11 @@ int main() {
     } 
     checkCudaErrors(cudaMemcpy(gate, gate_host, batch_size * top_k * sizeof(size_t), cudaMemcpyHostToDevice));
 
-    moe_cuda_forward_impl<data_t>(input, gate, weight, output, batch_size, top_k, in_feat, out_feat);
+    moe_first_linear_cuda_forward<data_t>(input, gate, weight, output, batch_size, top_k, in_feat, out_feat);
     
     for (size_t i=0; i<nt; ++i) {
         timestamp(start);
-		moe_cuda_forward_impl<data_t>(input, gate, weight, output, batch_size, top_k, in_feat, out_feat);
+		moe_first_linear_cuda_forward<data_t>(input, gate, weight, output, batch_size, top_k, in_feat, out_feat);
 		timestamp(end);
 		auto t = getDuration(start, end);
 		tsum += t;
