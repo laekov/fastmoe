@@ -5,5 +5,5 @@ pytorch/cuda/build
 exp/
 .vscode/
 a.out
-moe_first_linear_cuda.egg-info
+*.egg-info
 *.egg

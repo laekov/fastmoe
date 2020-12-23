@@ -1,36 +1,28 @@
+#include <torch/extension.h>
+#include <torch/torch.h>
 #include <cstdio>
 #include <iostream>
 #include <vector>
 
-// CUDA runtime
-#include <cuda.h>                                                                                             
-#include <cuda_runtime.h>                                                                                                 
-#include <cublas_v2.h>                                                                                                    
-                                                                                                                            
-// CUDA and CUBLAS functions                                                                                              
-//#include <helper_functions.h>                                                                                             
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <cublas_v2.h>                                                                                          
 #include <helper_cuda.h> 
 
-#include "timer.hh"
-
-
-typedef float data_t;
-size_t batch_size = 4096;
-size_t top_k = 2;
-size_t num_expert = 128;
-size_t in_feat = 1024;
-size_t out_feat = 4096;
+// #include "timer.hh"
 
 #define CEIL(_x_,_y_) (((_x_)-1)/(_y_)+1)
 
 template <typename scalar_t>
 __global__
-void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride, const size_t* offset, const scalar_t** ptrs) {
+void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride, const int* offset, const scalar_t** ptrs) {
 	size_t idx = threadIdx.x + blockDim.x * blockIdx.x;
 	if (idx < n) {
 		ptrs[idx] = base + stride * offset[idx];
 	}
 }
+
 
 inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
                                   cublasOperation_t transa,
@@ -74,10 +66,11 @@ inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
     return cublasHgemmBatched(handle, transa, transb, m, n, k, alpha, Aarray, lda, Barray, ldb, beta, Carray, ldc, batchCount);
 }
 
+
 template <typename scalar_t>
-void moe_first_linear_cuda_forward(
+void moe1_cuda_forward_impl(
         const scalar_t* input,
-        const size_t* gate,
+        const int* gate,
         const scalar_t* weight,
         scalar_t* output,
         const size_t batch_size,
@@ -85,7 +78,6 @@ void moe_first_linear_cuda_forward(
         const size_t in_feat,
         const size_t out_feat) {
     
-
     cublasHandle_t handle;
 	cudaStream_t st;
 	cudaStreamCreate(&st);
@@ -136,7 +128,44 @@ void moe_first_linear_cuda_forward(
 }
 
 
+std::vector<torch::Tensor> moe1_cuda_forward(
+        torch::Tensor input,
+        torch::Tensor gate,
+        torch::Tensor weight) {
+    const auto batch_size = input.size(0);
+    const auto top_k = gate.size(1);
+    const auto num_expert = weight.size(0);
+    const auto out_feat = weight.size(1);
+    const auto in_feat = weight.size(2);
+            
+    // printf("b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld, topk=%ld\n", batch_size, num_expert, in_feat, out_feat, top_k);
+    auto output = input.new_zeros({batch_size, top_k, out_feat});
+    
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe1_forward_cuda", ([&] {
+                moe1_cuda_forward_impl<scalar_t>(
+                    input.data_ptr<scalar_t>(),
+                    gate.data_ptr<int>(),
+                    weight.data_ptr<scalar_t>(),
+                    output.data_ptr<scalar_t>(),
+                    batch_size,
+                    top_k,
+                    in_feat,
+                    out_feat
+                );
+    }));
+    
+    return {output, };           
+}
+
+
+/*
 int main() {
+    typedef float data_t;
+    size_t batch_size = 4096;
+    size_t top_k = 2;
+    size_t num_expert = 128;
+    size_t in_feat = 1024;
+    size_t out_feat = 4096;
 	data_t *input, *weight;
 	data_t *output;
 	size_t *gate;
@@ -169,3 +198,4 @@ int main() {
 	double tflops = (double)batch_size * top_k * in_feat * out_feat * nt * 2e-12 / tsum;
 	printf("%.3lf TFLOPs\n", tflops);
 }
+*/
