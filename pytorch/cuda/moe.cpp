@@ -18,7 +18,7 @@ std::vector<torch::Tensor> moe1_cuda_forward(
 
 std::vector<torch::Tensor> moe1_forward(
         torch::Tensor input, // [B x D_model]
-        torch::Tensor gate,  // [B x K]
+        torch::Tensor gate,  // [B]
         torch::Tensor weight // [N x D_ffn x D_model]
         ) {
     CHECK_INPUT(input);
