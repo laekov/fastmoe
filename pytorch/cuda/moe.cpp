@@ -9,6 +9,12 @@ std::vector<torch::Tensor> moe1_cuda_forward(
     torch::Tensor gate,
     torch::Tensor weight);
 
+std::vector<torch::Tensor> moe1_cuda_backward(
+    torch::Tensor grad_output,
+    torch::Tensor input,
+    torch::Tensor gate,
+    torch::Tensor weight);
+
 // C++ interface
 
 // NOTE: AT_ASSERT has become AT_CHECK on master after 0.4.
@@ -17,10 +23,28 @@ std::vector<torch::Tensor> moe1_cuda_forward(
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
 std::vector<torch::Tensor> moe1_forward(
-        torch::Tensor input, // [B x D_model]
-        torch::Tensor gate,  // [B]
-        torch::Tensor weight // [N x D_ffn x D_model]
+        torch::Tensor input, // [batch_size x in_feat]
+        torch::Tensor gate,  // [batch_size]
+        torch::Tensor weight // [num_expert x out_feat x in_feat]
         ) {
+    CHECK_INPUT(input);
+    CHECK_INPUT(gate);
+    CHECK_INPUT(weight);
+    /*
+        The bias term should have been merged into weight. Note the following fact that 
+        Wx+b = [W b] [x]
+                     [1]  
+    */
+    return moe1_cuda_forward(input, gate, weight);
+}
+
+std::vector<torch::Tensor> moe1_backward(
+        torch::Tensor grad_output, // [batch_size x out_feat]
+        torch::Tensor input, // [batch_size x out_feat]
+        torch::Tensor gate,  // [batch_size]
+        torch::Tensor weight // [num_expert x out_feat x in_feat]
+        ) {
+    CHECK_INPUT(grad_output);
     CHECK_INPUT(input);
     CHECK_INPUT(gate);
     CHECK_INPUT(weight);
