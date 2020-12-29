@@ -53,7 +53,7 @@ std::vector<torch::Tensor> moe_backward(
         Wx+b = [W b] [x]
                      [1]  
     */
-    return moe_cuda_forward(input, gate, weight);
+    return moe_cuda_backward(grad_output, input, gate, weight);
 }
 
 

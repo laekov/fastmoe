@@ -49,3 +49,7 @@ input = torch.rand(batch_size, in_feat).cuda()
 gate = torch.randint(low=0, high=num_expert, size=(batch_size, )).int().cuda()
 
 output = moe(input, gate)
+
+
+y = output.mean()
+y.backward()
