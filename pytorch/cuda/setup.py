@@ -2,10 +2,10 @@ from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 setup(
-    name='moe1_cuda',
+    name='moe_cuda',
     ext_modules=[
         CUDAExtension(
-            name='moe1_cuda', 
+            name='moe_cuda', 
             sources=[
                 'moe.cpp',
                 'moe_cuda_kernel.cu',

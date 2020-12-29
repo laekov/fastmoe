@@ -1,2 +1,2 @@
 import torch
-import moe1_cuda
+import moe_cuda

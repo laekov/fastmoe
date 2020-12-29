@@ -4,12 +4,12 @@
 #include <iostream>
 #include <vector>
 
-std::vector<torch::Tensor> moe1_cuda_forward(
+std::vector<torch::Tensor> moe_cuda_forward(
     torch::Tensor input,
     torch::Tensor gate,
     torch::Tensor weight);
 
-std::vector<torch::Tensor> moe1_cuda_backward(
+std::vector<torch::Tensor> moe_cuda_backward(
     torch::Tensor grad_output,
     torch::Tensor input,
     torch::Tensor gate,
@@ -22,7 +22,7 @@ std::vector<torch::Tensor> moe1_cuda_backward(
 #define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
-std::vector<torch::Tensor> moe1_forward(
+std::vector<torch::Tensor> moe_forward(
         torch::Tensor input, // [batch_size x in_feat]
         torch::Tensor gate,  // [batch_size]
         torch::Tensor weight // [num_expert x out_feat x in_feat]
@@ -35,10 +35,10 @@ std::vector<torch::Tensor> moe1_forward(
         Wx+b = [W b] [x]
                      [1]  
     */
-    return moe1_cuda_forward(input, gate, weight);
+    return moe_cuda_forward(input, gate, weight);
 }
 
-std::vector<torch::Tensor> moe1_backward(
+std::vector<torch::Tensor> moe_backward(
         torch::Tensor grad_output, // [batch_size x out_feat]
         torch::Tensor input, // [batch_size x out_feat]
         torch::Tensor gate,  // [batch_size]
@@ -53,7 +53,7 @@ std::vector<torch::Tensor> moe1_backward(
         Wx+b = [W b] [x]
                      [1]  
     */
-    return moe1_cuda_forward(input, gate, weight);
+    return moe_cuda_forward(input, gate, weight);
 }
 
 
@@ -69,6 +69,6 @@ int main() {
 */
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("forward", &moe1_forward, "MoE first linear forward (CUDA)");
-  // m.def("backward", &lltm_backward, "LLTM backward (CUDA)");
+  m.def("forward", &moe_forward, "MoE forward (CUDA)");
+  m.def("backward", &moe_backward, "MoE backward (CUDA)");
 }
