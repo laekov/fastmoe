@@ -140,18 +140,13 @@ void moe_cuda_forward_impl(
         const size_t out_feat,
         const size_t num_expert,
         cublasOperation_t transb) {
-    /*
-    cublasHandle_t handle;
-	cudaStream_t st;
-	checkCudaErrors(cudaStreamCreate(&st));
-    checkCudaErrors(cublasCreate(&handle));
-    */
+
     Helper* h = getHelper(num_expert);
 
     checkCudaErrors(cublasSetStream(h->handle, *(h->streams)));
 
     // setup Aarray, Barray and Carray
-	std::vector<const scalar_t*> aptrs, bptrs;
+	std::vector<const scalar_t*> aptrs;
     std::vector<scalar_t*> cptrs;
 	
     const scalar_t **Aarray;
@@ -161,12 +156,8 @@ void moe_cuda_forward_impl(
     checkCudaErrors(cudaMalloc(&Barray, batch_size * sizeof(const scalar_t*)));
     checkCudaErrors(cudaMalloc(&Carray, batch_size * sizeof(scalar_t*)));
 
-    int* gate_host = new int[batch_size];
-    checkCudaErrors(cudaMemcpy(gate_host, gate, batch_size * sizeof(int), cudaMemcpyDeviceToHost));
-
 	for (size_t i=0; i<batch_size; ++i) {
         aptrs.push_back(input + in_feat * i);
-        bptrs.push_back(weight + out_feat * in_feat * gate_host[i]);
         cptrs.push_back(output + out_feat * i);
 	}
 	checkCudaErrors(cudaMemcpy(Aarray, aptrs.data(), batch_size * sizeof(const scalar_t*), cudaMemcpyHostToDevice));
@@ -176,17 +167,6 @@ void moe_cuda_forward_impl(
 	dim3 griddim(CEIL(batch_size, 256));
 	dim3 blockdim(256);
     generate_ptr_offset_kernel<<<griddim, blockdim, 0, *(h->streams)>>>(batch_size, weight, out_feat * in_feat, gate, Barray);
-
-    const scalar_t **B = (const scalar_t **)malloc(batch_size * sizeof(const scalar_t*));
-    checkCudaErrors(cudaMemcpy(B, Barray, batch_size * sizeof(const scalar_t*), cudaMemcpyDeviceToHost));
-    
-    std::cout << input << " " << weight << " " << output << std::endl;
-    for (size_t i=0; i<batch_size; ++i) {
-        std::cout << i << std::endl;
-        std::cout << "A " << aptrs[i] << std::endl;
-        std::cout << "B " << B[i] << " " << bptrs[i] << std::endl;
-        std::cout << "C " << cptrs[i] << std::endl;
-    }
 
     scalar_t alpha = 1, beta = 0;
 	checkCudaErrors(cublasXgemmBatched(h->handle, 

@@ -11,8 +11,10 @@ torch.cuda.manual_seed(42)
 class MOEFunction(Function):
     @staticmethod
     def forward(ctx, inp, gate, weight):
-        output = moe_cuda.forward(inp, gate, weight)
-        variables = [inp, gate, weight]
+        out_feat, in_feat = weight.size()[1:]
+        weight_column_major = weight.transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
+        output = moe_cuda.forward(inp, gate, weight_column_major)
+        variables = [inp, gate, weight_column_major]
         ctx.save_for_backward(*variables)
 
         return output[0]
@@ -21,7 +23,9 @@ class MOEFunction(Function):
     def backward(ctx, grad_out):
         grad_inp, grad_weight = moe_cuda.backward(
             grad_out.contiguous(), *ctx.saved_tensors)
-        return grad_inp, None, grad_weight
+        out_feat, in_feat = grad_weight.size()[1:]
+        grad_weight_row_major = grad_weight.transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
+        return grad_inp, None, grad_weight_row_major
 
 
 class MOELayer(nn.Module):
@@ -66,9 +70,9 @@ class MOELayer_einsum(nn.Module):
             x[i] = self.weight[gate_long[i]] @ inp[i]
         return x
 
-batch_size = 1
-num_expert = 1
-in_feat = 3
+batch_size = 4
+num_expert = 4
+in_feat = 2
 out_feat = 3
 
 moe = MOELayer(num_expert, in_feat, out_feat).cuda()
@@ -79,15 +83,7 @@ moe_einsum.weight.data = moe.weight.data.clone()
 inp = torch.rand(batch_size, in_feat).cuda()
 gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
 
-print(inp.type())
-print(moe.weight.data.type())
-
-print(inp)
-print(gate)
 output = moe(inp, gate)
-
-print(inp)
-print(gate)
 output_einsum = moe_einsum(inp.clone(), gate.clone())
 
 print(output)
