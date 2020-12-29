@@ -20,8 +20,8 @@ class MOEFunction(Function):
     @staticmethod
     def backward(ctx, grad_out):
         grad_input, grad_weight = moe_cuda.backward(
-            grad_out.contiguous(), *ctx.saved_variables)
-        return grad_input, grad_weight
+            grad_out.contiguous(), *ctx.saved_tensors)
+        return grad_input, None, grad_weight
 
 
 class MOELayer(nn.Module):
@@ -46,7 +46,7 @@ out_feat = 512
 moe = MOELayer(num_expert, in_feat, out_feat).cuda()
 
 input = torch.rand(batch_size, in_feat).cuda()
-gate = torch.randint(low=0, high=num_expert, size=(batch_size, )).int().cuda()
+gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
 
 output = moe(input, gate)
 
