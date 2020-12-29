@@ -189,7 +189,6 @@ void moe_cuda_forward_impl(
     }
 
     scalar_t alpha = 1, beta = 0;
-    
 	checkCudaErrors(cublasXgemmBatched(h->handle, 
 			CUBLAS_OP_N,
 			transb,
