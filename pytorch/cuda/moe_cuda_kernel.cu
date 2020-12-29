@@ -151,7 +151,7 @@ void moe_cuda_forward_impl(
     checkCudaErrors(cublasSetStream(h->handle, *(h->streams)));
 
     // setup Aarray, Barray and Carray
-	std::vector<const scalar_t*> aptrs;
+	std::vector<const scalar_t*> aptrs, bptrs;
     std::vector<scalar_t*> cptrs;
 	
     const scalar_t **Aarray;
@@ -163,6 +163,7 @@ void moe_cuda_forward_impl(
 
 	for (size_t i=0; i<batch_size; ++i) {
         aptrs.push_back(input + in_feat * i);
+        bptrs.push_back(weight + out_feat * in_feat * i);
         cptrs.push_back(output + out_feat * i);
 	}
 	checkCudaErrors(cudaMemcpy(Aarray, aptrs.data(), batch_size * sizeof(const scalar_t*), cudaMemcpyHostToDevice));
@@ -173,14 +174,23 @@ void moe_cuda_forward_impl(
 	dim3 blockdim(256);
     generate_ptr_offset_kernel<<<griddim, blockdim, 0, *(h->streams)>>>(batch_size, weight, out_feat * in_feat, gate, Barray);
 
+    const scalar_t **B = (const scalar_t **)malloc(batch_size * sizeof(const scalar_t*));
+    checkCudaErrors(cudaMemcpy(B, Barray, batch_size * sizeof(const scalar_t*), cudaMemcpyDeviceToHost));
+    
+    std::cout << weight << std::endl;
+    for (size_t i=0; i<batch_size; ++i) {
+        std::cout << B[i] << " " << bptrs[i] << std::endl;
+    }
+
     scalar_t alpha = 1, beta = 0;
+    
 	checkCudaErrors(cublasXgemmBatched(h->handle, 
 			CUBLAS_OP_N,
 			transb,
 			1, out_feat, in_feat,
 			&alpha,
 			Aarray, 1,
-			Barray, out_feat,
+			Barray, (transb == CUBLAS_OP_T) ? out_feat : in_feat,
 			&beta,
 			Carray, 1,
 			batch_size));
@@ -234,7 +244,7 @@ std::vector<torch::Tensor> moe_cuda_forward(
     const auto out_feat = weight.size(1);
     const auto in_feat = weight.size(2);
             
-    // printf("b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld, topk=%ld\n", batch_size, num_expert, in_feat, out_feat, top_k);
+    printf("b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
     auto output = input.new_zeros({batch_size, out_feat});
     
     AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_forward_cuda", ([&] {

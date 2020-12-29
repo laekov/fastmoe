@@ -6,7 +6,7 @@ import torch
 import moe_cuda
 
 torch.manual_seed(42)
-
+torch.cuda.manual_seed(42)
 
 class MOEFunction(Function):
     @staticmethod
@@ -27,29 +27,70 @@ class MOEFunction(Function):
 class MOELayer(nn.Module):
     def __init__(self, num_expert=32, in_feat=1024, out_feat=4096):
         super(MOELayer, self).__init__()
+        self.num_expert = num_expert
+        self.in_feat = in_feat
+        self.out_feat = out_feat
         self.weight = nn.Parameter(
             torch.Tensor(num_expert, out_feat, in_feat))
         self.reset_parameters()
 
     def reset_parameters(self):
-        pass
+        for i in range(self.num_expert):
+            linear = nn.Linear(in_features=self.in_feat, out_features=out_feat)
+            self.weight.data[i] = linear.weight.data
 
     def forward(self, input, gate):
         return MOEFunction.apply(input, gate, self.weight)
 
 
-batch_size = 64
-num_expert = 32
-in_feat = 512
-out_feat = 512
+class MOELayer_einsum(nn.Module):
+    def __init__(self, num_expert=32, in_feat=1024, out_feat=4096):
+        super(MOELayer_einsum, self).__init__()
+        self.num_expert = num_expert
+        self.in_feat = in_feat
+        self.out_feat = out_feat
+        self.weight = nn.Parameter(
+            torch.Tensor(num_expert, out_feat, in_feat))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for i in range(self.num_expert):
+            linear = nn.Linear(in_features=self.in_feat, out_features=out_feat)
+            self.weight.data[i] = linear.weight.data
+    
+    def forward(self, input, gate):
+        gate_long = gate.long()
+        #W = self.weight[gate_long] # [batch_size x out_feat x in_feat]
+        #x = torch.einsum('id,ihd->ih', (input, W)) # [batch_size x out_feat]
+        #return x
+        batch_size = input.size(0)
+        x = input.new_zeros((batch_size, self.out_feat))
+        for i in range(batch_size):
+            x[i] = self.weight[gate_long[i]] @ input[i]
+        return x
+
+batch_size = 2
+num_expert = 2
+in_feat = 2
+out_feat = 4
 
 moe = MOELayer(num_expert, in_feat, out_feat).cuda()
+moe_einsum = MOELayer_einsum(num_expert, in_feat, out_feat).cuda()
+moe_einsum.weight.data = moe.weight.data.clone()
 
 input = torch.rand(batch_size, in_feat).cuda()
 gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
 
+print(input)
+print(gate)
 output = moe(input, gate)
 
+print(input)
+print(gate)
+output_einsum = moe_einsum(input, gate)
 
-y = output.mean()
-y.backward()
+print(output)
+print(output_einsum)
+
+#y = output.mean()
+#y.backward()
