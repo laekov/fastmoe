@@ -161,9 +161,12 @@ void moe_cuda_forward_impl(
     checkCudaErrors(cudaMalloc(&Barray, batch_size * sizeof(const scalar_t*)));
     checkCudaErrors(cudaMalloc(&Carray, batch_size * sizeof(scalar_t*)));
 
+    int* gate_host = new int[batch_size];
+    checkCudaErrors(cudaMemcpy(gate_host, gate, batch_size * sizeof(int), cudaMemcpyDeviceToHost));
+
 	for (size_t i=0; i<batch_size; ++i) {
         aptrs.push_back(input + in_feat * i);
-        bptrs.push_back(weight + out_feat * in_feat * i);
+        bptrs.push_back(weight + out_feat * in_feat * gate_host[i]);
         cptrs.push_back(output + out_feat * i);
 	}
 	checkCudaErrors(cudaMemcpy(Aarray, aptrs.data(), batch_size * sizeof(const scalar_t*), cudaMemcpyHostToDevice));
@@ -177,9 +180,12 @@ void moe_cuda_forward_impl(
     const scalar_t **B = (const scalar_t **)malloc(batch_size * sizeof(const scalar_t*));
     checkCudaErrors(cudaMemcpy(B, Barray, batch_size * sizeof(const scalar_t*), cudaMemcpyDeviceToHost));
     
-    std::cout << weight << std::endl;
+    std::cout << input << " " << weight << " " << output << std::endl;
     for (size_t i=0; i<batch_size; ++i) {
-        std::cout << B[i] << " " << bptrs[i] << std::endl;
+        std::cout << i << std::endl;
+        std::cout << "A " << aptrs[i] << std::endl;
+        std::cout << "B " << B[i] << " " << bptrs[i] << std::endl;
+        std::cout << "C " << cptrs[i] << std::endl;
     }
 
     scalar_t alpha = 1, beta = 0;
