@@ -21,12 +21,12 @@ class MOEFunction(Function):
 
     @staticmethod
     def backward(ctx, grad_out):
-        print("grad_out", grad_out)
-        print("input", ctx.saved_tensors[0])
+        # print("grad_out", grad_out)
+        # print("input", ctx.saved_tensors[0])
         grad_inp, grad_weight = moe_cuda.backward(
             grad_out.contiguous(), *ctx.saved_tensors)
         out_feat, in_feat = grad_weight.size()[1:]
-        print("grad_weight_column_major", grad_weight.flatten())
+        # print("grad_weight_column_major", grad_weight.flatten())
         grad_weight_row_major = grad_weight.view(-1, in_feat, out_feat).transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
         return grad_inp, None, grad_weight_row_major
 
@@ -74,6 +74,17 @@ class MOELayer_raw(nn.Module):
         return x
 
 
+def test_module(moe, linear, inp, gate):
+    linear.zero_grad()
+    moe.zero_grad()
+    x = linear(inp)
+    output = moe(x, gate)
+    print(output)
+    y = output.mean()
+    y.backward()
+    return output, moe.weight.grad, linear.weight.grad, linear.bias.grad
+
+
 def test():
     batch_size = 4
     num_expert = 4
@@ -89,28 +100,13 @@ def test():
     inp = torch.rand(batch_size, in_feat).cuda()
     gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
 
-    linear.zero_grad()
-    moe.zero_grad()
-    x = linear(inp)
-    output = moe(x, gate)
-    print("moe output", output)
-    y = output.mean()
-    y.backward()
-    print("moe.weight.grad", moe.weight.grad)
-    print("linear.weight.grad", linear.weight.grad)
-    print("linear.bias.grad", linear.bias.grad)
+    moe_out = test_module(moe, linear, inp.clone(), gate.clone())
+    raw_out = test_module(moe_raw, linear, inp.clone(), gate.clone())
 
-
-    linear.zero_grad()
-    moe.zero_grad()
-    x = linear(inp.clone())
-    output_raw= moe_raw(x, gate.clone())
-    print("moe_raw output", output_raw)
-    y_raw = output_raw.mean()
-    y_raw.backward()
-    print("moe_raw.weight.grad", moe_raw.weight.grad)
-    print("linear_raw.weight.grad", linear.weight.grad)
-    print("linear_raw.bias.grad", linear.bias.grad)
+    names = ['Out', 'Moe wei', 'Linear wei', 'Linear bias']
+    for name, mo, ro in zip(names, moe_out, raw_out):
+        err = (mo - ro).abs().sum()
+        print('{} abs err {}'.format(name, err))
 
 if __name__ == '__main__':
     test()

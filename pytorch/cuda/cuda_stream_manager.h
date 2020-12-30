@@ -6,24 +6,27 @@
 #include <helper_cuda.h> 
 
 
-class CudaStreamManager {
-public:
+struct CudaStreamManager {
+    const size_t num_expert;
+    cublasHandle_t* handles;
+    cudaStream_t* streams;
+
     CudaStreamManager(const size_t num_expert_) : num_expert(num_expert_) {
         streams = new cudaStream_t[num_expert];
-        checkCudaErrors(cublasCreate(&handle));
+		handles = new cublasHandle_t[num_expert];
         for (size_t i=0; i<num_expert; ++i) {
-            checkCudaErrors(cudaStreamCreate(streams+i));
-        }
+			checkCudaErrors(cublasCreate(handles + i));
+			checkCudaErrors(cudaStreamCreate(streams + i));
+			checkCudaErrors(cublasSetStream(handles[i], streams[i]));
+		}
     }
+
     ~CudaStreamManager() {
         for (size_t i=0; i<num_expert; ++i) {
-            checkCudaErrors(cudaStreamDestroy(*(streams+i)));
-        }
-        checkCudaErrors(cublasDestroy(handle));
+            checkCudaErrors(cudaStreamDestroy(streams[i]));
+			checkCudaErrors(cublasDestroy(handles[i]));
+		}
     }
-    const size_t num_expert;
-    cublasHandle_t handle;
-    cudaStream_t* streams;
 }; 
 
 CudaStreamManager* getCudaStreamManager(const size_t num_expert);
