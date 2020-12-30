@@ -38,7 +38,7 @@ struct CudaStreamManager {
 		return handles[idx % MAX_STREAMS];
 	}
 
-	void sync();
+	void sync(int=-1);
 }; 
 
 CudaStreamManager* getCudaStreamManager(const size_t num_expert);
