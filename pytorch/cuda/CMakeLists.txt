@@ -4,10 +4,24 @@ project(moe)
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
-include_directories("/home/jiezhong/miniconda3/include/python3.8"
-                   "/usr/local/cuda/include"
-                   "/usr/local/cuda/samples/common/inc")
-add_executable(moe moe.cpp)
+if(NOT PYTHON_INCLUDE)
+	set(PYTHON_INCLUDE "/home/jiezhong/miniconda3/include/python3.8")
+endif()
+
+if(NOT CUDA_HOME)
+	set(CUDA_HOME "/usr/local/cuda")
+endif()
+
+if(NOT CUDA_SAMPLE_INCLUDE)
+	set(CUDA_SAMPLE_INCLUDE "/usr/local/cuda/samples/common/inc")
+endif()
+
+include_directories(
+	"${PYTHON_INCLUDE}"
+	"${CUDA_HOME}/include"
+	"${CUDA_SAMPLE_INCLUDE}"
+	)
+add_executable(moe moe.cpp cuda_stream_manager.cpp)
 target_link_libraries(moe 
                     "${TORCH_LIBRARIES}")
 set_property(TARGET moe PROPERTY CXX_STANDARD 14)

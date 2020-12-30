@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <iostream>
 #include <vector>
-#include <cassert>
 
 
 #include <cuda.h>
@@ -13,37 +12,10 @@
 
 // #include "timer.hh"
 
+#include "cublas_wrapper.h"
+#include "cuda_stream_manager.h"
+
 #define CEIL(_x_,_y_) (((_x_)-1)/(_y_)+1)
-
-
-class Helper {
-public:
-    Helper(const size_t num_expert_) : num_expert(num_expert_) {
-        streams = new cudaStream_t[num_expert];
-        checkCudaErrors(cublasCreate(&handle));
-        for (size_t i=0; i<num_expert; ++i) {
-            checkCudaErrors(cudaStreamCreate(streams+i));
-        }
-    }
-    ~Helper() {
-        for (size_t i=0; i<num_expert; ++i) {
-            checkCudaErrors(cudaStreamDestroy(*(streams+i)));
-        }
-        checkCudaErrors(cublasDestroy(handle));
-    }
-    const size_t num_expert;
-    cublasHandle_t handle;
-    cudaStream_t* streams;
-}; 
-
-Helper* helper = NULL;
-Helper* getHelper(const size_t num_expert) { 
-    if (!helper) {
-        helper = new Helper(num_expert);        
-    }
-    assert(helper->num_expert == num_expert);
-    return helper;
-}
 
 
 template <typename scalar_t>
@@ -55,79 +27,6 @@ void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride, c
 	}
 }
 
-
-inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
-                                  cublasOperation_t transa,
-                                  cublasOperation_t transb,
-                                  int m, int n, int k,
-                                  const float           *alpha,
-                                  const float           *Aarray[], int lda,
-                                  const float           *Barray[], int ldb,
-                                  const float           *beta,
-                                  float           *Carray[], int ldc,
-                                  int batchCount) {
-    return cublasSgemmBatched(handle, transa, transb, m, n, k, alpha, Aarray, lda, Barray, ldb, beta, Carray, ldc, batchCount);
-}
-
-inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
-                                  cublasOperation_t transa,
-                                  cublasOperation_t transb,
-                                  int m, int n, int k,
-                                  const double           *alpha,
-                                  const double           *Aarray[], int lda,
-                                  const double           *Barray[], int ldb,
-                                  const double           *beta,
-                                  double           *Carray[], int ldc,
-                                  int batchCount) {
-    return cublasDgemmBatched(handle, transa, transb, m, n, k, alpha, Aarray, lda, Barray, ldb, beta, Carray, ldc, batchCount);
-}
-
-inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
-                                  cublasOperation_t transa,
-                                  cublasOperation_t transb,
-                                  int m, int n, int k,
-                                  const __half           *alpha,
-                                  const __half           *Aarray[], int lda,
-                                  const __half           *Barray[], int ldb,
-                                  const __half           *beta,
-                                  __half           *Carray[], int ldc,
-                                  int batchCount) {
-    return cublasHgemmBatched(handle, transa, transb, m, n, k, alpha, Aarray, lda, Barray, ldb, beta, Carray, ldc, batchCount);
-}
-
-
-inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
-                                cublasOperation_t transa, cublasOperation_t transb,
-                                int m, int n, int k,
-                                const float           *alpha,
-                                const float           *A, int lda,
-                                const float           *B, int ldb,
-                                const float           *beta,
-                                float           *C, int ldc) {
-    return cublasSgemm(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
-}
-
-inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
-                                cublasOperation_t transa, cublasOperation_t transb,
-                                int m, int n, int k,
-                                const double          *alpha,
-                                const double          *A, int lda,
-                                const double          *B, int ldb,
-                                const double          *beta,
-                                double          *C, int ldc) {
-    return cublasDgemm(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
-}
-
-inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
-                                cublasOperation_t transa, cublasOperation_t transb,
-                                int m, int n, int k,
-                                const __half *alpha,
-                                const __half *A, int lda,
-                                const __half *B, int ldb,
-                                const __half *beta,
-                                __half *C, int ldc) {
-    return cublasHgemm(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
-}
 
 template <typename scalar_t>
 void moe_cuda_forward_impl(
@@ -141,7 +40,7 @@ void moe_cuda_forward_impl(
         const size_t num_expert,
         cublasOperation_t transb) {
 
-    Helper* h = getHelper(num_expert);
+    auto* h = getCudaStreamManager(num_expert);
 
     checkCudaErrors(cublasSetStream(h->handle, *(h->streams)));
 
@@ -160,25 +59,29 @@ void moe_cuda_forward_impl(
         aptrs.push_back(input + in_feat * i);
         cptrs.push_back(output + out_feat * i);
 	}
-	checkCudaErrors(cudaMemcpy(Aarray, aptrs.data(), batch_size * sizeof(const scalar_t*), cudaMemcpyHostToDevice));
-	// checkCudaErrors(cudaMemcpy(ptrs + batch_size * top_k, bptrs.data(), batch_size * sizeof(scalar_t*) * top_k, cudaMemcpyHostToDevice));
-	checkCudaErrors(cudaMemcpy(Carray, cptrs.data(), batch_size * sizeof(scalar_t*), cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(Aarray, aptrs.data(), batch_size * sizeof(const
+					scalar_t*), cudaMemcpyHostToDevice));
+	// checkCudaErrors(cudaMemcpy(ptrs + batch_size * top_k, bptrs.data(),
+	// batch_size * sizeof(scalar_t*) * top_k, cudaMemcpyHostToDevice));
+	checkCudaErrors(cudaMemcpy(Carray, cptrs.data(), batch_size *
+				sizeof(scalar_t*), cudaMemcpyHostToDevice));
 
-	dim3 griddim(CEIL(batch_size, 256));
-	dim3 blockdim(256);
-    generate_ptr_offset_kernel<<<griddim, blockdim, 0, *(h->streams)>>>(batch_size, weight, out_feat * in_feat, gate, Barray);
+	dim3 griddim(CEIL(batch_size, 256)); dim3 blockdim(256);
+	generate_ptr_offset_kernel<<<griddim, blockdim, 0,
+		*(h->streams)>>>(batch_size, weight, out_feat * in_feat, gate, Barray);
 
-    scalar_t alpha = 1, beta = 0;
-	checkCudaErrors(cublasXgemmBatched(h->handle, 
-			CUBLAS_OP_N,
-			transb,
-			1, out_feat, in_feat,
-			&alpha,
-			Aarray, 1,
-			Barray, (transb == CUBLAS_OP_T) ? out_feat : in_feat,
-			&beta,
-			Carray, 1,
-			batch_size));
+	scalar_t alpha = 1, beta = 0; 
+
+	checkCudaErrors(cublasXgemmBatched(h->handle,
+				CUBLAS_OP_N,
+				transb,
+				1, out_feat, in_feat,
+				&alpha,
+				Aarray, 1,
+				Barray, (transb == CUBLAS_OP_T) ? out_feat : in_feat,
+				&beta,
+				Carray, 1,
+				batch_size));
 
 	checkCudaErrors(cudaStreamSynchronize(*(h->streams)));
 }
@@ -194,7 +97,7 @@ void moe_cuda_grad_weight(
         const size_t out_feat,
         const size_t num_expert) {
 
-    Helper* h = getHelper(num_expert);
+    auto h = getCudaStreamManager(num_expert);
     
     int* gate_host = new int[batch_size];
     scalar_t alpha = 1, beta = 1;
@@ -231,7 +134,9 @@ std::vector<torch::Tensor> moe_cuda_forward(
     const auto out_feat = weight.size(1);
     const auto in_feat = weight.size(2);
             
+#ifdef MOE_DEBUG
     printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
+#endif
     auto output = input.new_zeros({batch_size, out_feat});
     
     AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_forward_cuda", ([&] {
