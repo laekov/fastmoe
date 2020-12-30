@@ -21,10 +21,13 @@ class MOEFunction(Function):
 
     @staticmethod
     def backward(ctx, grad_out):
+        print("grad_out", grad_out)
+        print("input", ctx.saved_tensors[0])
         grad_inp, grad_weight = moe_cuda.backward(
             grad_out.contiguous(), *ctx.saved_tensors)
         out_feat, in_feat = grad_weight.size()[1:]
-        grad_weight_row_major = grad_weight.transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
+        print("grad_weight_column_major", grad_weight.flatten())
+        grad_weight_row_major = grad_weight.view(-1, in_feat, out_feat).transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
         return grad_inp, None, grad_weight_row_major
 
 
@@ -47,9 +50,9 @@ class MOELayer(nn.Module):
         return MOEFunction.apply(inp, gate, self.weight)
 
 
-class MOELayer_einsum(nn.Module):
+class MOELayer_raw(nn.Module):
     def __init__(self, num_expert=32, in_feat=1024, out_feat=4096):
-        super(MOELayer_einsum, self).__init__()
+        super(MOELayer_raw, self).__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
@@ -71,23 +74,29 @@ class MOELayer_einsum(nn.Module):
         return x
 
 batch_size = 4
-num_expert = 4
+num_expert = 8
 in_feat = 2
 out_feat = 3
 
 moe = MOELayer(num_expert, in_feat, out_feat).cuda()
-moe_einsum = MOELayer_einsum(num_expert, in_feat, out_feat).cuda()
-moe_einsum.weight.data = moe.weight.data.clone()
+moe_raw = MOELayer_raw(num_expert, in_feat, out_feat).cuda()
+moe_raw.weight.data = moe.weight.data.clone()
 
 
 inp = torch.rand(batch_size, in_feat).cuda()
 gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
 
 output = moe(inp, gate)
-output_einsum = moe_einsum(inp.clone(), gate.clone())
+output_raw = moe_raw(inp.clone(), gate.clone())
 
-print(output)
-print(output_einsum)
+#print(output)
+#print(output_raw)
 
-#y = output.mean()
-#y.backward()
+y = output.mean()
+y.backward()
+
+y_raw = output_raw.mean()
+y_raw.backward()
+
+print(moe.weight.grad)
+print(moe_raw.weight.grad)

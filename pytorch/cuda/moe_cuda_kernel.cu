@@ -203,7 +203,7 @@ void moe_cuda_grad_weight(
         checkCudaErrors(cublasSetStream(h->handle, *(h->streams + gate_host[i])));
         checkCudaErrors(cublasXgemm(h->handle,
             CUBLAS_OP_N, 
-            CUBLAS_OP_N,
+            CUBLAS_OP_T,
             out_feat, 
             in_feat, 
             1,
@@ -211,7 +211,7 @@ void moe_cuda_grad_weight(
             grad_output + i * out_feat,
             out_feat,
             input + i * in_feat,
-            1,
+            in_feat,
             &beta,
             grad_weight + gate_host[i] * out_feat * in_feat,
             out_feat));
@@ -229,7 +229,7 @@ std::vector<torch::Tensor> moe_cuda_forward(
     const auto out_feat = weight.size(1);
     const auto in_feat = weight.size(2);
             
-    printf("b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
+    printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
     auto output = input.new_zeros({batch_size, out_feat});
     
     AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_forward_cuda", ([&] {
@@ -259,6 +259,7 @@ std::vector<torch::Tensor> moe_cuda_backward(
     const auto num_expert = weight.size(0);
     const auto out_feat = weight.size(1);
     const auto in_feat = weight.size(2);
+    printf("[backward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
 
     auto grad_input = grad_output.new_zeros({batch_size, in_feat});  // batch_size x in_feat
     auto grad_weight = grad_output.new_zeros({num_expert, out_feat, in_feat}); // num_expert x out_feat x in_feat
@@ -285,8 +286,8 @@ std::vector<torch::Tensor> moe_cuda_backward(
             grad_output.data_ptr<scalar_t>(),
             grad_weight.data_ptr<scalar_t>(),
             batch_size,
-            out_feat,
             in_feat,
+            out_feat,
             num_expert
         );
     }));
