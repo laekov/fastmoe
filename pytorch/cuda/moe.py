@@ -80,6 +80,8 @@ def test():
     in_feat = 2
     out_feat = 3
 
+    linear = nn.Linear(in_feat, in_feat).cuda()
+
     moe = MOELayer(num_expert, in_feat, out_feat).cuda()
     moe_raw = MOELayer_raw(num_expert, in_feat, out_feat).cuda()
     moe_raw.weight.data = moe.weight.data.clone()
@@ -87,21 +89,28 @@ def test():
     inp = torch.rand(batch_size, in_feat).cuda()
     gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
 
-    output = moe(inp, gate)
-    output_raw= moe_raw(inp.clone(), gate.clone())
-
-    print(output)
-    print(output_raw)
-
+    linear.zero_grad()
+    moe.zero_grad()
+    x = linear(inp)
+    output = moe(x, gate)
+    print("moe output", output)
     y = output.mean()
     y.backward()
+    print("moe.weight.grad", moe.weight.grad)
+    print("linear.weight.grad", linear.weight.grad)
+    print("linear.bias.grad", linear.bias.grad)
 
+
+    linear.zero_grad()
+    moe.zero_grad()
+    x = linear(inp.clone())
+    output_raw= moe_raw(x, gate.clone())
+    print("moe_raw output", output_raw)
     y_raw = output_raw.mean()
     y_raw.backward()
-
-    print(moe.weight.grad)
-    print(moe_raw.weight.grad)
-
+    print("moe_raw.weight.grad", moe_raw.weight.grad)
+    print("linear_raw.weight.grad", linear.weight.grad)
+    print("linear_raw.bias.grad", linear.bias.grad)
 
 if __name__ == '__main__':
     test()
