@@ -216,7 +216,9 @@ void moe_cuda_grad_weight(
             grad_weight + gate_host[i] * out_feat * in_feat,
             out_feat));
     }
-    checkCudaErrors(cudaDeviceSynchronize());
+    for (size_t i=0; i<num_expert; ++i) {
+        checkCudaErrors(cudaStreamSynchronize(*(h->streams + i)));
+    }
     delete[] gate_host;
 }
 
