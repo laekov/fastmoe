@@ -10,17 +10,20 @@
 #include <cublas_v2.h>                                                                                          
 #include <helper_cuda.h> 
 
-// #include "timer.hh"
+#include "timer.hh"
 
 #include "cublas_wrapper.h"
 #include "cuda_stream_manager.h"
 
 #define CEIL(_x_,_y_) (((_x_)-1)/(_y_)+1)
 
+// #define MOE_BREAKDOWN
+#define MOE_DEBUG
 
 template <typename scalar_t>
 __global__
-void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride, const int* offset, const scalar_t** ptrs) {
+void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride,
+		const int* offset, const scalar_t** ptrs) { 
 	size_t idx = threadIdx.x + blockDim.x * blockIdx.x;
 	if (idx < n) {
 		ptrs[idx] = base + stride * offset[idx];
@@ -32,22 +35,35 @@ template <typename scalar_t>
 void moe_cuda_forward_impl(
         const scalar_t* input,
         const int* d_gate,
-        const scalar_t* weight,
+        const scalar_t* weight1,
+        const scalar_t* weight2,
         scalar_t* output,
         const size_t batch_size,
         const size_t in_feat,
+        const size_t hidden_feat,
         const size_t out_feat,
-        const size_t num_expert,
-        cublasOperation_t transb) {
+        const size_t num_expert) {
 
     auto h = getCudaStreamManager(num_expert);
 
-	scalar_t *input_buf, *output_buf;
+#ifdef MOE_BREAKDOWN
+	timestamp(t_init);
+#endif
+
+	scalar_t *input_buf, *hidden_buf, *output_buf;
 
 	checkCudaErrors(cudaMalloc(&input_buf, sizeof(scalar_t) * batch_size *
 				in_feat));
 	checkCudaErrors(cudaMalloc(&output_buf, sizeof(scalar_t) * batch_size *
 				out_feat));
+	checkCudaErrors(cudaMalloc(&hidden_buf, sizeof(scalar_t) * batch_size *
+				hidden_feat));
+
+#ifdef MOE_BREAKDOWN
+	timestamp(t_malloc);
+	fprintf(stderr, "Malloc time %.3lf us\n", getDuration(t_init, t_malloc) *
+			1e6);
+#endif
 
     int *gate = new int[batch_size];
 	int *expert_count = new int[num_expert], *expert_ptr = new int[num_expert];
@@ -55,6 +71,13 @@ void moe_cuda_forward_impl(
 
 	checkCudaErrors(cudaMemcpy(gate, d_gate, sizeof(int) * batch_size,
 				cudaMemcpyDeviceToHost));
+
+#ifdef MOE_BREAKDOWN
+	timestamp(t_cpy);
+	fprintf(stderr, "Copy time %.3lf us\n", getDuration(t_malloc, t_cpy) *
+			1e6);
+#endif
+
 	for (int i = 0; i < batch_size; ++i) {
 		++expert_count[gate[i]];
 	}
@@ -62,6 +85,13 @@ void moe_cuda_forward_impl(
 	for (int i = 1; i < num_expert; ++i) {
 		expert_ptr[i] = expert_ptr[i - 1] + expert_count[i - 1];
 	}
+
+#ifdef MOE_BREAKDOWN
+	timestamp(t_expert);
+	fprintf(stderr, "Expert asn time %.3lf us\n", getDuration(t_cpy, t_expert) *
+			1e6);
+#endif
+
 	for (int i = 0; i < batch_size; ++i) {
 		int target_idx = expert_ptr[gate[i]]++;
 #ifdef MOE_DEBUG_SCATTER
@@ -72,6 +102,13 @@ void moe_cuda_forward_impl(
 					cudaMemcpyDeviceToDevice,
 					h->getStream(gate[i])));
 	}
+
+#ifdef MOE_BREAKDOWN
+	h->sync();
+	timestamp(t_scatter);
+	fprintf(stderr, "Scatter time %.3lf us\n", getDuration(t_expert, t_scatter) *
+			1e6);
+#endif
 
 	scalar_t alpha = 1, beta = 0; 
 
@@ -86,19 +123,37 @@ void moe_cuda_forward_impl(
 #endif
 		// Use T(B) x T(A) = T(C) to produce row-major C
 		checkCudaErrors(cublasXgemm(h->getHandle(i),
-				(transb == CUBLAS_OP_T) ? CUBLAS_OP_N : CUBLAS_OP_T,
+				CUBLAS_OP_T,
 				CUBLAS_OP_N,
-				out_feat, expert_count[i], in_feat,
+				hidden_feat, expert_count[i], in_feat,
 				&alpha,
-				weight + i * in_feat * out_feat, 
-				(transb == CUBLAS_OP_T) ? out_feat : in_feat,
+				weight1 + i * in_feat * hidden_feat, in_feat,
 				input_buf + ptr * in_feat, in_feat,
 				&beta,
-				output_buf + out_feat * ptr,
-				out_feat
+				hidden_buf + hidden_feat * ptr, hidden_feat
 				));
+
+		checkCudaErrors(cublasXgemm(h->getHandle(i),
+				CUBLAS_OP_T,
+				CUBLAS_OP_N,
+				out_feat, expert_count[i], hidden_feat,
+				&alpha,
+				weight2 + i * hidden_feat * out_feat, hidden_feat,
+				hidden_buf + hidden_feat * ptr, hidden_feat,
+				&beta,
+				output_buf + out_feat * ptr, out_feat
+				));
+
 		ptr += expert_count[i];
 	}
+
+#ifdef MOE_BREAKDOWN
+	h->sync();
+	timestamp(t_mm);
+	fprintf(stderr, "GeMM time %.3lf us\n", getDuration(t_scatter, t_mm) *
+			1e6);
+#endif
+
 	for (int i = batch_size - 1; i >= 0; --i) {
 		int target_idx = --expert_ptr[gate[i]];
 #ifdef MOE_DEBUG_SCATTER
@@ -112,6 +167,14 @@ void moe_cuda_forward_impl(
 	}
 
 	h->sync();
+
+#ifdef MOE_BREAKDOWN
+	timestamp(t_gather);
+	fprintf(stderr, "Gather time %.3lf us\n", getDuration(t_mm, t_gather) *
+			1e6);
+	fprintf(stderr, "Overall time %.3lf us\n", getDuration(t_init, t_gather) *
+			1e6);
+#endif
 
 	cudaFree(input_buf);
 	cudaFree(output_buf);
@@ -159,14 +222,17 @@ void moe_cuda_grad_weight(
 std::vector<torch::Tensor> moe_cuda_forward(
         torch::Tensor input,
         torch::Tensor gate,
-        torch::Tensor weight) {
+        torch::Tensor weight1,
+        torch::Tensor weight2
+		) {
     const auto batch_size = input.size(0);
-    const auto num_expert = weight.size(0);
-    const auto out_feat = weight.size(1);
-    const auto in_feat = weight.size(2);
+    const auto num_expert = weight1.size(0);
+    const auto out_feat = weight2.size(1);
+	const auto hidden_feat = weight1.size(1);
+    const auto in_feat = weight1.size(2);
             
 #ifdef MOE_DEBUG
-    printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
+    printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, hidden_feat = %ld,out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, hidden_feat, out_feat);
 #endif
     auto output = input.new_zeros({batch_size, out_feat});
     
@@ -174,13 +240,14 @@ std::vector<torch::Tensor> moe_cuda_forward(
                 moe_cuda_forward_impl<scalar_t>(
                     input.data_ptr<scalar_t>(),
                     gate.data_ptr<int>(),
-                    weight.data_ptr<scalar_t>(),
+                    weight1.data_ptr<scalar_t>(),
+                    weight2.data_ptr<scalar_t>(),
                     output.data_ptr<scalar_t>(),
                     batch_size,
                     in_feat,
+					hidden_feat,
                     out_feat,
-                    num_expert,
-                    CUBLAS_OP_T
+                    num_expert
                 );
     }));
     
@@ -205,6 +272,7 @@ std::vector<torch::Tensor> moe_cuda_backward(
     auto grad_weight = grad_output.new_zeros({num_expert, out_feat, in_feat}); // num_expert x out_feat x in_feat
 
     // grad_input is easy to compute, exactly the same as forward
+	/* TODO: Backward currently brokenn
     AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_cuda_backward", ([&] {
         moe_cuda_forward_impl<scalar_t>(
             grad_output.data_ptr<scalar_t>(),
@@ -218,6 +286,7 @@ std::vector<torch::Tensor> moe_cuda_backward(
             CUBLAS_OP_N
         );
     }));
+	*/
 
     AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_cuda_backward", ([&] {
         moe_cuda_grad_weight<scalar_t>(

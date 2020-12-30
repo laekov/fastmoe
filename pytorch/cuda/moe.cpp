@@ -7,13 +7,14 @@
 std::vector<torch::Tensor> moe_cuda_forward(
     torch::Tensor input,
     torch::Tensor gate,
-    torch::Tensor weight);
+    torch::Tensor weight1,
+    torch::Tensor weight2);
 
 std::vector<torch::Tensor> moe_cuda_backward(
     torch::Tensor grad_output,
     torch::Tensor input,
     torch::Tensor gate,
-    torch::Tensor weight);
+	torch::Tensor weight);
 
 // C++ interface
 
@@ -25,17 +26,19 @@ std::vector<torch::Tensor> moe_cuda_backward(
 std::vector<torch::Tensor> moe_forward(
         torch::Tensor input, // [batch_size x in_feat]
         torch::Tensor gate,  // [batch_size]
-        torch::Tensor weight // [num_expert x out_feat x in_feat]
+        torch::Tensor weight1, // [num_expert x hidden_feat x in_feat]
+        torch::Tensor weight2 // [num_expert x out_feat x hidden_feat]
         ) {
     CHECK_INPUT(input);
     CHECK_INPUT(gate);
-    CHECK_INPUT(weight);
+    CHECK_INPUT(weight1);
+    CHECK_INPUT(weight2);
     /*
         The bias term should have been merged into weight. Note the following fact that 
         Wx+b = [W b] [x]
                      [1]  
     */
-    return moe_cuda_forward(input, gate, weight);
+    return moe_cuda_forward(input, gate, weight1, weight2);
 }
 
 std::vector<torch::Tensor> moe_backward(
