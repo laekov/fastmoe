@@ -6,13 +6,13 @@ then
 	python moe.py
 elif [ .$1 = '.test_all' ]
 then
-	for bs in 4 16 64 
+	for nexp in 1 2 4 
 	do
-		for inf in 1024 4096
+		for inf in 1024 
 		do
-			for ouf in 1024 4096
+			for ouf in 4096
 			do
-				for nexp in 4 16 64
+				for bs in 4 16 64 256 512 1024 2048 4096
 				do
 					echo $bs $nexp ${inf}x${ouf} 
 					python moe_test.py $bs $inf $ouf $nexp
