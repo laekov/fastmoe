@@ -26,7 +26,7 @@ def perf():
         te = time.time()
         tott += te - ts
 
-    gflops = 2e-9 * n_runs * in_feat * out_feat * batch_size
+    gflops = 2e-9 * n_runs * in_feat * out_feat * batch_size / tott
     print('Mean time {:.3f} ms, {:.3f} GFLOPs'.format(tott * 1e3 / n_runs, gflops))
 
 
