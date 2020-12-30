@@ -43,7 +43,7 @@ class MOELayer(nn.Module):
 
     def reset_parameters(self):
         for i in range(self.num_expert):
-            linear = nn.Linear(in_features=self.in_feat, out_features=out_feat)
+            linear = nn.Linear(in_features=self.in_feat, out_features=self.out_feat)
             self.weight.data[i] = linear.weight.data
 
     def forward(self, inp, gate):
@@ -62,7 +62,7 @@ class MOELayer_raw(nn.Module):
 
     def reset_parameters(self):
         for i in range(self.num_expert):
-            linear = nn.Linear(in_features=self.in_feat, out_features=out_feat)
+            linear = nn.Linear(in_features=self.in_feat, out_features=self.out_feat)
             self.weight.data[i] = linear.weight.data
     
     def forward(self, inp, gate):
@@ -73,30 +73,35 @@ class MOELayer_raw(nn.Module):
             x[i] = self.weight[gate_long[i]] @ inp[i]
         return x
 
-batch_size = 4
-num_expert = 8
-in_feat = 2
-out_feat = 3
 
-moe = MOELayer(num_expert, in_feat, out_feat).cuda()
-moe_raw = MOELayer_raw(num_expert, in_feat, out_feat).cuda()
-moe_raw.weight.data = moe.weight.data.clone()
+def test():
+    batch_size = 4
+    num_expert = 4
+    in_feat = 2
+    out_feat = 3
+
+    moe = MOELayer(num_expert, in_feat, out_feat).cuda()
+    moe_raw = MOELayer_raw(num_expert, in_feat, out_feat).cuda()
+    moe_raw.weight.data = moe.weight.data.clone()
+
+    inp = torch.rand(batch_size, in_feat).cuda()
+    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
+
+    output = moe(inp, gate)
+    output_raw= moe_raw(inp.clone(), gate.clone())
+
+    print(output)
+    print(output_raw)
+
+    y = output.mean()
+    y.backward()
+
+    y_raw = output_raw.mean()
+    y_raw.backward()
+
+    print(moe.weight.grad)
+    print(moe_raw.weight.grad)
 
 
-inp = torch.rand(batch_size, in_feat).cuda()
-gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
-
-output = moe(inp, gate)
-output_raw = moe_raw(inp.clone(), gate.clone())
-
-#print(output)
-#print(output_raw)
-
-y = output.mean()
-y.backward()
-
-y_raw = output_raw.mean()
-y_raw.backward()
-
-print(moe.weight.grad)
-print(moe_raw.weight.grad)
+if __name__ == '__main__':
+    test()
