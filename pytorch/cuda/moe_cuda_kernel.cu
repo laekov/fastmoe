@@ -70,7 +70,7 @@ void moe_cuda_forward_impl(
 		checkCudaErrors(cudaMemcpyAsync(input_buf + target_idx * in_feat, 
 					input + i * in_feat, sizeof(scalar_t) * in_feat,
 					cudaMemcpyDeviceToDevice,
-					h->streams[gate[i]]));
+					h->getStream(gate[i])));
 	}
 
 	scalar_t alpha = 1, beta = 0; 
@@ -85,7 +85,7 @@ void moe_cuda_forward_impl(
 				in_feat);
 #endif
 		// Use T(B) x T(A) = T(C) to produce row-major C
-		checkCudaErrors(cublasXgemm(h->handles[i],
+		checkCudaErrors(cublasXgemm(h->getHandle(i),
 				(transb == CUBLAS_OP_T) ? CUBLAS_OP_N : CUBLAS_OP_T,
 				CUBLAS_OP_N,
 				out_feat, expert_count[i], in_feat,
@@ -108,12 +108,11 @@ void moe_cuda_forward_impl(
 					output_buf + target_idx * out_feat,
 					sizeof(scalar_t) * out_feat,
 					cudaMemcpyDeviceToDevice,
-					h->streams[gate[i]]));
+					h->getStream(gate[i])));
 	}
 
-	for (int i = 0; i < num_expert; ++i) {
-		cudaStreamSynchronize(h->streams[i]);
-	}
+	h->sync();
+
 	cudaFree(input_buf);
 	cudaFree(output_buf);
 }
