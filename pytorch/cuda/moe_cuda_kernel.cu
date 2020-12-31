@@ -20,9 +20,9 @@
 
 #define CEIL(_x_,_y_) (((_x_)-1)/(_y_)+1)
 
-#define MOE_DEBUG
+// #define MOE_DEBUG
 // #define MOE_BREAKDOWN
-#define MOE_DEBUG_SCATTER
+// #define MOE_DEBUG_SCATTER
 
 template <typename scalar_t>
 __global__
@@ -114,7 +114,7 @@ void moe_cuda_forward_impl(
 	for (int i = 0; i < batch_size; ++i) {
 		pos[i] = expert_ptr[gate[i]]++;
 	}
-	for (int i = batch_size - 1; i > 0; --i) {
+	for (int i = tot_expert - 1; i > 0; --i) {
 		expert_ptr[i] = expert_ptr[i - 1];
 	}
 	expert_ptr[0] = 0;
