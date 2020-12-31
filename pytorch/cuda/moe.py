@@ -71,7 +71,7 @@ class MOELayer_raw(nn.Module):
     def reset_parameters(self):
         for i in range(self.num_expert):
             linear = nn.Linear(in_features=self.in_feat, out_features=self.hidden_feat)
-            print(linear.weight.shape)
+            # print(linear.weight.shape)
             self.weight1.data[i] = linear.weight.data
             linear = nn.Linear(in_features=self.hidden_feat, out_features=self.out_feat)
             self.weight2.data[i] = linear.weight.data
@@ -80,10 +80,10 @@ class MOELayer_raw(nn.Module):
         gate_long = gate.long()
         batch_size = inp.size(0)
         x = inp.new_zeros((batch_size, self.out_feat))
-        print(self.weight2)
+        # print(self.weight2)
         for i in range(batch_size):
             hid = inp[i] @ self.weight1[gate_long[i]].t()
-            print(hid)
+            # print(hid)
             x[i] = hid @ self.weight2[gate_long[i]].t()
         return x
 

@@ -12,12 +12,19 @@ setup(
             sources=[
                 'moe.cpp',
                 'cuda_stream_manager.cpp',
+                'comm_manager.cpp',
                 'moe_cuda_kernel.cu',
                 ],
-            extra_compile_args={'cxx': ['-I{}'.format(CUDA_HELPER)],
-                                'nvcc': ['-I{}'.format(CUDA_HELPER)]}
-        )
-    ],
+            extra_compile_args={
+                'cxx': [
+                    '-I{}'.format(CUDA_HELPER),
+                    ],
+                'nvcc': [
+                    '-I{}'.format(CUDA_HELPER),
+                    ]
+                }
+            )
+        ],
     cmdclass={
         'build_ext': BuildExtension
     })

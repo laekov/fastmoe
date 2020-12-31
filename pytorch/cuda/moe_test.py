@@ -1,21 +1,27 @@
-from moe import MOELayer
+from moe import MOELayer, MOELayer_raw
 import torch
 import time
 import sys
 
 
 def perf():
+    torch.manual_seed(42 + torch.distributed.get_rank())
+    torch.cuda.manual_seed(42 + torch.distributed.get_rank())
+    
     batch_size = int(sys.argv[1])
     io_feat = int(sys.argv[2])
     hidden_feat = int(sys.argv[3])
     num_expert = int(sys.argv[4])
 
     inp = torch.rand(batch_size, io_feat).cuda()
-    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
+    gate = torch.randint(low=0, 
+            high=num_expert * torch.distributed.get_world_size(), 
+            size=(batch_size, ), requires_grad=False).int().cuda()
 
     moe = MOELayer(num_expert, io_feat, hidden_feat, io_feat).cuda()
 
     o = moe(inp, gate)
+    return
     o = moe(inp, gate)
     o = moe(inp, gate)
     o = moe(inp, gate)
@@ -42,4 +48,6 @@ def perf():
 
 
 if __name__ == '__main__':
+    torch.distributed.init_process_group(backend='mpi')
+    # print('{} / {}'.format(torch.distributed.get_rank(), torch.distributed.get_world_size()))
     perf()
