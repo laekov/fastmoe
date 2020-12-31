@@ -72,9 +72,9 @@ class MOELayer_raw(nn.Module):
         for i in range(self.num_expert):
             linear = nn.Linear(in_features=self.in_feat, out_features=self.hidden_feat)
             # print(linear.weight.shape)
-            self.weight1.data[i] = linear.weight.data
+            self.weight1.data[i] = (linear.weight.data)
             linear = nn.Linear(in_features=self.hidden_feat, out_features=self.out_feat)
-            self.weight2.data[i] = linear.weight.data
+            self.weight2.data[i] = (linear.weight.data)
     
     def forward(self, inp, gate):
         gate_long = gate.long()
@@ -91,11 +91,12 @@ class MOELayer_raw(nn.Module):
 def test_module(moe, linear, inp, gate):
     linear.zero_grad()
     moe.zero_grad()
-    x = linear(inp)
+    x = (linear(inp))
     output = moe(x, gate)
-    print(output)
+    # print(output)
+    if torch.distributed.get_rank() == 1:
+        print(output)
     return output
-    print(output)
     y = output.mean()
     y.backward()
     return output, moe.weight.grad, linear.weight.grad, linear.bias.grad
@@ -117,6 +118,7 @@ def test():
 
     inp = torch.rand(batch_size, in_feat).cuda()
     gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
+    gate = torch.Tensor([0, 1, 0, 1]).int().cuda()
 
     moe_out = test_module(moe, linear, inp.clone(), gate.clone())
     raw_out = test_module(moe_raw, linear, inp.clone(), gate.clone())
@@ -128,4 +130,5 @@ def test():
         print('{} abs err {}'.format(name, err))
 
 if __name__ == '__main__':
+    torch.distributed.init_process_group(backend='mpi')
     test()

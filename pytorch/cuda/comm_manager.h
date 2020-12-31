@@ -1,6 +1,14 @@
 #ifndef COMM_MANAGER_H
 #define COMM_MANAGER_H
 
+#define NCCL_SAFE_CALL(__fn__) { \
+	auto __res__ = __fn__; \
+	if (__res__ != ncclSuccess) { \
+		fprintf(stderr, "NCCL Error at %s:%d value %d\n", __FILE__, __LINE__, __res__); \
+		exit(-1); \
+	} \
+}
+
 #include <mpi.h>
 #include "nccl.h"
 
@@ -17,7 +25,7 @@ struct CommManager {
 			ncclGetUniqueId(&uid);
 		}
 		MPI_Bcast(&uid, sizeof(uid), MPI_BYTE, 0, MPI_COMM_WORLD);
-		ncclCommInitRank(&ncclcomm, size, uid, rank);
+		NCCL_SAFE_CALL(ncclCommInitRank(&ncclcomm, size, uid, rank));
 	}
 };
 

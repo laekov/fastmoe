@@ -21,7 +21,6 @@ def perf():
     moe = MOELayer(num_expert, io_feat, hidden_feat, io_feat).cuda()
 
     o = moe(inp, gate)
-    return
     o = moe(inp, gate)
     o = moe(inp, gate)
     o = moe(inp, gate)

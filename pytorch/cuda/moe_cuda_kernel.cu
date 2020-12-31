@@ -21,7 +21,7 @@
 #define CEIL(_x_,_y_) (((_x_)-1)/(_y_)+1)
 
 // #define MOE_DEBUG
-// #define MOE_BREAKDOWN
+#define MOE_BREAKDOWN
 // #define MOE_DEBUG_SCATTER
 
 template <typename scalar_t>
@@ -192,15 +192,13 @@ void moe_cuda_forward_impl(
 		output_buf = local_output_buf;
 	}
 
+	h->sync(0);
+
 #ifdef MOE_BREAKDOWN
-	h->sync();
 	timestamp(t_scatter);
 	fprintf(stderr, "Scatter time %.3lf us\n", getDuration(t_expert, t_scatter) *
 			1e6);
 #endif
-
-	h->sync(0);
-	// fprintf(stderr, "First %d in %.3f\n", cm->rank, print_first_float(input_buf));
 
 	scalar_t alpha = 1, beta = 0; 
 
@@ -251,15 +249,6 @@ void moe_cuda_forward_impl(
 			NCCL_SAFE_CALL(ncclGroupStart());
 			for (int j = 0; j < cm->size; ++j) {
 				int idx = i + j * num_expert;
-				if (expert_count[idx]) {
-					NCCL_SAFE_CALL(ncclRecv(
-							local_output_buf + expert_ptr[idx] * out_feat, 
-							expert_count[idx] * out_feat * sizeof(scalar_t),
-							ncclChar, 
-							j,
-							cm->ncclcomm,
-							h->getStream(0)));
-				}
 				if (all_expert_count[idx]) {
 					NCCL_SAFE_CALL(ncclSend(
 							output_buf + send_ptr * out_feat,
@@ -270,21 +259,36 @@ void moe_cuda_forward_impl(
 							h->getStream(0)));
 					send_ptr += all_expert_count[idx];
 				}
+				if (expert_count[idx]) {
+					NCCL_SAFE_CALL(ncclRecv(
+							local_output_buf + expert_ptr[idx] * out_feat, 
+							expert_count[idx] * out_feat * sizeof(scalar_t),
+							ncclChar, 
+							j,
+							cm->ncclcomm,
+							h->getStream(0)));
+				}
 			}
 			NCCL_SAFE_CALL(ncclGroupEnd());
 		}
 	}
 
+#ifdef MOE_BREAKDOWN
+	h->sync(0);
+	timestamp(t_gather);
+	fprintf(stderr, "Gather time %.3lf us\n", getDuration(t_mm, t_gather) *
+			1e6);
+#endif
 	batch_gather_kernel<scalar_t>
 		<<<batch_size, 256, 0, h->getStream(0)>>>(out_feat, d_pos, 
 				local_output_buf, output); 
 	h->sync(0);
 
 #ifdef MOE_BREAKDOWN
-	timestamp(t_gather);
-	fprintf(stderr, "Gather time %.3lf us\n", getDuration(t_mm, t_gather) *
+	timestamp(t_end);
+	fprintf(stderr, "Local gather %.3lf us\n", getDuration(t_gather, t_end) *
 			1e6);
-	fprintf(stderr, "Overall time %.3lf us\n", getDuration(t_init, t_gather) *
+	fprintf(stderr, "Overall time %.3lf us\n", getDuration(t_init, t_end) *
 			1e6);
 #endif
 
