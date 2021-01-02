@@ -5,11 +5,14 @@
 #include <cublas_v2.h>
 #include <helper_cuda.h> 
 
+#include <cstdio>
+
 
 class CudaStreamManager {
 public:
     CudaStreamManager(const size_t num_expert_, const int device_) : num_expert(num_expert_), device(device_) {
         checkCudaErrors(cudaSetDevice(device));
+        printf("set device %d\n", device);
         streams = new cudaStream_t[num_expert];
         checkCudaErrors(cublasCreate(&handle));
         for (size_t i=0; i<num_expert; ++i) {

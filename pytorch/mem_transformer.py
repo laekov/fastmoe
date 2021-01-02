@@ -45,7 +45,7 @@ class CustomizedMoEPositionwiseFF(nn.Module):
         self.d_inner = d_inner
         self.dropout = dropout
 
-        self.gate = nn.Linear(d_model, d_inner)
+        self.gate = nn.Linear(d_model, num_expert)
 
         self.moe1 = MOELayer(num_expert=num_expert, in_feat=d_model, out_feat=d_inner)
         self.moe2 = MOELayer(num_expert=num_expert, in_feat=d_inner, out_feat=d_model)
@@ -81,7 +81,7 @@ class CustomizedMoEPositionwiseFF(nn.Module):
         for i in range(self.top_k):
             print("top %d" % i)
             gate_idx = gate_top_k_idx[:, i].contiguous()
-            print(inp.size(), gate_idx.size())
+            print(inp.size(), gate_idx.size(), inp.device, gate_idx.device)
             x = self.moe1(inp, gate_idx)
             x = self.dropout(F.relu(x))
             # x = F.pad(x, pad=(0, 1), mode='constant', value=1.0)
