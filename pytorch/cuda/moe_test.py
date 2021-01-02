@@ -20,7 +20,7 @@ def perf():
     n_runs = 16
     tott = 0.
     for i in range(n_runs):
-        gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
+        gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda("cuda:1")
         ts = time.time()
         o = moe(inp, gate)
         te = time.time()
