@@ -5,8 +5,6 @@ import torch
 
 import moe_cuda
 
-torch.manual_seed(42)
-torch.cuda.manual_seed(42)
 
 class MOEFunction(Function):
     @staticmethod
@@ -21,12 +19,12 @@ class MOEFunction(Function):
 
     @staticmethod
     def backward(ctx, grad_out):
-        print("grad_out", grad_out)
-        print("input", ctx.saved_tensors[0])
+        # print("grad_out", grad_out)
+        # print("input", ctx.saved_tensors[0])
         grad_inp, grad_weight = moe_cuda.backward(
             grad_out.contiguous(), *ctx.saved_tensors)
         out_feat, in_feat = grad_weight.size()[1:]
-        print("grad_weight_column_major", grad_weight.flatten())
+        # print("grad_weight_column_major", grad_weight.flatten())
         grad_weight_row_major = grad_weight.view(-1, in_feat, out_feat).transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
         return grad_inp, None, grad_weight_row_major
 
@@ -47,7 +45,7 @@ class MOELayer(nn.Module):
             self.weight.data[i] = linear.weight.data
 
     def forward(self, inp, gate):
-        return MOEFunction.apply(inp, gate, self.weight)
+        return MOEFunction.apply(inp, gate.int(), self.weight)
 
 
 class MOELayer_raw(nn.Module):
@@ -75,6 +73,8 @@ class MOELayer_raw(nn.Module):
 
 
 def test():
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
     batch_size = 4
     num_expert = 4
     in_feat = 2

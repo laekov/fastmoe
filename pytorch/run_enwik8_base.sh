@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export LD_LIBRARY_PATH=/home/jiezhong/miniconda3/lib:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
 if [[ $1 == 'train' ]]; then
     echo 'Run training...'
     python train.py \
