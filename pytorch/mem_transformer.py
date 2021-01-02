@@ -87,7 +87,7 @@ class CustomizedMoEPositionwiseFF(nn.Module):
             # x = F.pad(x, pad=(0, 1), mode='constant', value=1.0)
             x = self.moe2(x, gate_idx)
             x = self.dropout(x) # (BxL) x d_model
-            output.append(x.unsqueeze(1)) # (BxL) x 1 x d_model
+            core_out.append(x.unsqueeze(1)) # (BxL) x 1 x d_model
         
         core_out = torch.cat(core_out, dim=1) # (BxL) x top_k x d_model 
         core_out = torch.bmm(gate_score, core_out) # (BxL) x 1 x d_model
