@@ -10,10 +10,10 @@ def perf():
     out_feat = int(sys.argv[3])
     num_expert = int(sys.argv[4])
 
-    inp = torch.rand(batch_size, in_feat).cuda()
-    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
+    inp = torch.rand(batch_size, in_feat).cuda("cuda:1")
+    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda("cuda:1")
 
-    moe = MOELayer(num_expert, in_feat, out_feat).cuda()
+    moe = MOELayer(num_expert, in_feat, out_feat).cuda("cuda:1")
 
     o = moe(inp, gate)
 

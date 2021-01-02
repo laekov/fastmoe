@@ -8,7 +8,8 @@
 
 class CudaStreamManager {
 public:
-    CudaStreamManager(const size_t num_expert_) : num_expert(num_expert_) {
+    CudaStreamManager(const size_t num_expert_, const int device_) : num_expert(num_expert_), device(device_) {
+        checkCudaErrors(cudaSetDevice(device));
         streams = new cudaStream_t[num_expert];
         checkCudaErrors(cublasCreate(&handle));
         for (size_t i=0; i<num_expert; ++i) {
@@ -22,10 +23,11 @@ public:
         checkCudaErrors(cublasDestroy(handle));
     }
     const size_t num_expert;
+    const int device;
     cublasHandle_t handle;
     cudaStream_t* streams;
 }; 
 
-CudaStreamManager* getCudaStreamManager(const size_t num_expert);
+CudaStreamManager* getCudaStreamManager(const size_t num_expert, const int device);
 
 #endif  // CUDA_STREAM_MANAGER 
