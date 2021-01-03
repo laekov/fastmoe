@@ -85,7 +85,10 @@ void moe_cuda_forward_impl(
 				Carray, 1,
 				batch_size));
 
-	checkCudaErrors(cudaStreamSynchronize(*(h->streams)));
+    checkCudaErrors(cudaStreamSynchronize(*(h->streams)));
+    checkCudaErrors(cudaFree(Aarray));
+    checkCudaErrors(cudaFree(Barray));
+    checkCudaErrors(cudaFree(Carray));
 }
 
 template <typename scalar_t>
