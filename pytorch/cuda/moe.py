@@ -133,7 +133,6 @@ def test_dp():
     moe = MOELayer(num_expert, in_feat, out_feat).cuda()
     moe_dp = torch.nn.DataParallel(moe, device_ids=[0,1,2])
     for i in range(5):
-        print(i, "forward")
         output = moe_dp(inp, gate)
 
 
