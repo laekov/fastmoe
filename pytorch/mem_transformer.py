@@ -34,7 +34,7 @@ class PositionalEmbedding(nn.Module):
             return pos_emb[:,None,:]
 
 class CustomizedMoEPositionwiseFF(nn.Module):
-    def __init__(self, d_model, d_inner, dropout, pre_lnorm=False, top_k=2, num_expert=4):
+    def __init__(self, d_model, d_inner, dropout, pre_lnorm=False, top_k=2, num_expert=32):
         super(CustomizedMoEPositionwiseFF, self).__init__()
         print("CustomizedMoEPositionwiseFF num_expert=%d top_k=%d" % (num_expert, top_k))
 
