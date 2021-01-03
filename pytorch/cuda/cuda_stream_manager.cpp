@@ -1,8 +1,9 @@
 #include <cassert>
+#include <thread>
 
 #include "cuda_stream_manager.h"
 
-CudaStreamManager* smgr = NULL;
+thread_local CudaStreamManager* smgr = NULL;
 
 CudaStreamManager* getCudaStreamManager(const size_t num_expert, const int device) { 
     if (!smgr) {

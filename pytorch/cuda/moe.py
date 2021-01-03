@@ -115,7 +115,7 @@ def test():
 def test_dp():
     torch.manual_seed(42)
     torch.cuda.manual_seed(42)
-    batch_size = 4
+    batch_size = 6
     num_expert = 4
     in_feat = 2
     out_feat = 3
@@ -125,14 +125,16 @@ def test_dp():
 
     print("data parallel of a nn.Linear model")
     linear = nn.Linear(in_feat, in_feat).cuda()
-    moe_linear = torch.nn.DataParallel(linear, device_ids=[0, 1])
-    output = moe_linear(inp)
+    linear_dp = torch.nn.DataParallel(linear, device_ids=[0,1,2])
+    output = linear_dp(inp)
     print("successful!")
 
     print("data parallel of our MoE model")
     moe = MOELayer(num_expert, in_feat, out_feat).cuda()
-    moe_dp = torch.nn.DataParallel(moe, device_ids=[0, 1])
-    output = moe_dp(inp, gate)
+    moe_dp = torch.nn.DataParallel(moe, device_ids=[0,1,2])
+    for i in range(5):
+        print(i, "forward")
+        output = moe_dp(inp, gate)
 
 
 
