@@ -34,6 +34,7 @@ public:
             checkCudaErrors(cudaStreamDestroy(*(streams+i)));
         }
         checkCudaErrors(cublasDestroy(handle));
+        delete[] streams;
     }
     const size_t num_expert;
     const int device;
