@@ -3,8 +3,10 @@
 
 #include "cuda_stream_manager.h"
 
-thread_local CudaStreamManager* smgr = NULL;
+thread_local CudaStreamManager smgr;
 
+
+/*
 CudaStreamManager* getCudaStreamManager(const size_t num_expert, const int device) { 
     if (!smgr) {
         smgr = new CudaStreamManager(num_expert, device);        
@@ -13,3 +15,4 @@ CudaStreamManager* getCudaStreamManager(const size_t num_expert, const int devic
     assert(smgr->device == device);
     return smgr;
 }
+*/
