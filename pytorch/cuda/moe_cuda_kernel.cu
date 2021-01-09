@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>                                                                                          
 #include <helper_cuda.h> 
+#include <c10/cuda/CUDAGuard.h>
 
 #include "timer.hh"
 
@@ -19,6 +20,8 @@
 
 // #define MOE_BREAKDOWN
 // #define MOE_DEBUG
+
+thread_local CudaStreamManager smgr;
 
 template <typename scalar_t>
 __global__
@@ -103,7 +106,6 @@ void moe_cuda_forward_impl(
 	expert_ptr[0] = 0;
 	for (int i = 1; i < num_expert; ++i) {
 		expert_ptr[i] = expert_ptr[i - 1] + expert_count[i - 1];
-	}
 
 	int *pos = new int[batch_size];
 	int *d_pos;
@@ -197,8 +199,6 @@ void moe_cuda_grad_weight(
         const size_t out_feat,
         const size_t num_expert) {
 
-    auto h = getCudaStreamManager(num_expert);
-    
     int* gate_host = new int[batch_size];
     scalar_t alpha = 1, beta = 1;
     checkCudaErrors(cudaMemcpy(gate_host, gate, batch_size * sizeof(int), cudaMemcpyDeviceToHost));
@@ -220,7 +220,7 @@ void moe_cuda_grad_weight(
             out_feat));
     }
     for (size_t i=0; i<num_expert; ++i) {
-        checkCudaErrors(cudaStreamSynchronize(*(h->streams + i)));
+        checkCudaErrors(cudaStreamSynchronize(*(smgr.streams + i)));
     }
     delete[] gate_host;
 }
@@ -238,6 +238,10 @@ std::vector<torch::Tensor> moe_cuda_forward(
 #ifdef MOE_DEBUG
     printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
 #endif
+    const int device = device_of(input).value().index();
+    if (smgr.streams == NULL) {
+        smgr.setup(num_expert, device);
+    }
     auto output = input.new_zeros({batch_size, out_feat});
     
     AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_forward_cuda", ([&] {
@@ -266,9 +270,14 @@ std::vector<torch::Tensor> moe_cuda_backward(
     const auto num_expert = weight.size(0);
     const auto out_feat = weight.size(1);
     const auto in_feat = weight.size(2);
+
 #ifdef MOE_DEBUG
     printf("[backward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
 #endif
+    const int device = device_of(input).value().index();
+    if (smgr.streams == NULL) {
+        smgr.setup(num_expert, device);
+    }
 
     auto grad_input = grad_output.new_zeros({batch_size, in_feat});  // batch_size x in_feat
     auto grad_weight = grad_output.new_zeros({num_expert, out_feat, in_feat}); // num_expert x out_feat x in_feat

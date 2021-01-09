@@ -5,8 +5,6 @@ import torch
 
 import moe_cuda
 
-torch.manual_seed(42)
-torch.cuda.manual_seed(42)
 
 class MOEFunction(Function):
     @staticmethod
@@ -47,7 +45,7 @@ class MOELayer(nn.Module):
             self.weight.data[i] = linear.weight.data
 
     def forward(self, inp, gate):
-        return MOEFunction.apply(inp, gate, self.weight)
+        return MOEFunction.apply(inp, gate.int(), self.weight)
 
 
 class MOELayer_raw(nn.Module):
@@ -89,6 +87,8 @@ def test_module(moe, linear, inp, gate):
 
 
 def test():
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
     batch_size = 4
     num_expert = 2
     in_feat = 6
@@ -112,5 +112,31 @@ def test():
         err = (mo - ro).abs().sum()
         print('{} abs err {}'.format(name, err))
 
+def test_dp():
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+    batch_size = 6
+    num_expert = 4
+    in_feat = 2
+    out_feat = 3
+
+    inp = torch.rand(batch_size, in_feat).cuda()
+    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
+
+    print("data parallel of a nn.Linear model")
+    linear = nn.Linear(in_feat, in_feat).cuda()
+    linear_dp = torch.nn.DataParallel(linear, device_ids=[0,1,2])
+    output = linear_dp(inp)
+    print("successful!")
+
+    print("data parallel of our MoE model")
+    moe = MOELayer(num_expert, in_feat, out_feat).cuda()
+    moe_dp = torch.nn.DataParallel(moe, device_ids=[0,1,2])
+    for i in range(5):
+        output = moe_dp(inp, gate)
+
+
+
 if __name__ == '__main__':
-    test()
+    # test()
+    test_dp()

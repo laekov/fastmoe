@@ -5,42 +5,49 @@
 #include <cublas_v2.h>
 #include <helper_cuda.h> 
 
+#include <cstdio>
 
-#define MAX_STREAMS 16
 
+class CudaStreamManager {
+public:
+    CudaStreamManager() : num_expert(0), device(0), streams(NULL) {
+        int current_device;
+        checkCudaErrors(cudaGetDevice(&current_device));
+#ifdef MOE_DEBUG
+        printf("constructor at device %d\n", current_device);
+#endif
+    }
 
-struct CudaStreamManager {
-    const size_t num_expert;
-    cublasHandle_t* handles;
-    cudaStream_t* streams;
-
-    CudaStreamManager(const size_t num_expert_) : num_expert(num_expert_) {
-        streams = new cudaStream_t[MAX_STREAMS];
-		handles = new cublasHandle_t[MAX_STREAMS];
-        for (size_t i=0; i<MAX_STREAMS; ++i) {
-			checkCudaErrors(cublasCreate(handles + i));
-			checkCudaErrors(cudaStreamCreate(streams + i));
-			checkCudaErrors(cublasSetStream(handles[i], streams[i]));
-		}
+    void setup(const size_t num_expert, const int device) {
+#ifdef MOE_DEBUG
+        printf("setup at device %d\n", device);
+#endif
+        this->num_expert = num_expert;
+        this->device = device;
+        checkCudaErrors(cudaSetDevice(device));        
+        streams = new cudaStream_t[num_expert];
+        checkCudaErrors(cublasCreate(&handle));
+        for (size_t i=0; i<num_expert; ++i) {
+            checkCudaErrors(cudaStreamCreate(streams+i));
+        }
     }
 
     ~CudaStreamManager() {
-        for (size_t i=0; i<MAX_STREAMS; ++i) {
-            checkCudaErrors(cudaStreamDestroy(streams[i]));
-			checkCudaErrors(cublasDestroy(handles[i]));
-		}
+#ifdef MOE_DEBUG
+        printf("destructor at device %d\n", device);
+#endif
+        for (size_t i=0; i<num_expert; ++i) {
+            checkCudaErrors(cudaStreamDestroy(*(streams+i)));
+        }
+        checkCudaErrors(cublasDestroy(handle));
+        delete[] streams;
     }
-
-	inline cudaStream_t& getStream(int idx) {
-		return streams[idx % MAX_STREAMS];
-	}
-	inline cublasHandle_t& getHandle(int idx) {
-		return handles[idx % MAX_STREAMS];
-	}
-
-	void sync(int=-1);
+    size_t num_expert;
+    int device;
+    cublasHandle_t handle;
+    cudaStream_t* streams;
 }; 
 
-CudaStreamManager* getCudaStreamManager(const size_t num_expert);
+// CudaStreamManager* getCudaStreamManager(const size_t num_expert, const int device);
 
 #endif  // CUDA_STREAM_MANAGER 
