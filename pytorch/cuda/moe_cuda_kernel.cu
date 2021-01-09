@@ -4,10 +4,9 @@
 #include <iostream>
 #include <vector>
 
-
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <cublas_v2.h>                                                                                          
+#include <cublas_v2.h>
 #include <helper_cuda.h> 
 #include <c10/cuda/CUDAGuard.h>
 
@@ -18,13 +17,6 @@
 
 #define CEIL(_x_,_y_) (((_x_)-1)/(_y_)+1)
 
-// #define MOE_BREAKDOWN
-// #define MOE_DEBUG
-
-// thread_local CudaStreamManager smgr;
-// TODO: handle stream manager faults with torch threads
-CudaStreamManager smgr;
-
 template <typename scalar_t>
 __global__
 void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride,
@@ -34,7 +26,6 @@ void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride,
 		ptrs[idx] = base + stride * offset[idx];
 	}
 }
-
 
 template <typename scalar_t>
 __global__
@@ -77,8 +68,6 @@ void moe_cuda_expert_count_impl(
 				cudaMemcpyHostToDevice));
 	delete [] gate;
 	delete [] expert_ptr;
-
-	ENSURE_SMGR(smgr, num_expert);
 }
 
 template <typename scalar_t>
@@ -87,11 +76,12 @@ void moe_cuda_local_scatter_impl(
 		const int* d_pos,
 		scalar_t* input_buf,
 		const size_t batch_size,
-		const size_t in_feat) {
+		const size_t in_feat, 
+		CudaStreamManager* smgr) {
 	batch_scatter_kernel<scalar_t>
-		<<<batch_size, 256, 0, smgr.stream(0)>>>(in_feat, d_pos, input,
+		<<<batch_size, 256, 0, smgr->stream(0)>>>(in_feat, d_pos, input,
 				input_buf); 
-	smgr.sync(0);
+	smgr->sync(1);
 }
 
 template <typename scalar_t>
@@ -111,11 +101,12 @@ void moe_cuda_local_gather_impl(
 		const int* d_pos,
 		scalar_t* output,
 		const size_t batch_size,
-		const size_t out_feat) {
+		const size_t out_feat,
+		CudaStreamManager* smgr) {
 	batch_gather_kernel<scalar_t>
-		<<<batch_size, 256, 0, smgr.stream(0)>>>(out_feat, d_pos, output_buf,
+		<<<batch_size, 256, 0, smgr->stream(0)>>>(out_feat, d_pos, output_buf,
 				output); 
-	smgr.sync(0);
+	smgr->sync(1);
 }
 
 template <typename scalar_t>
@@ -126,7 +117,8 @@ void moe_cuda_forward_impl(
         scalar_t* output_buf,
         const size_t in_feat,
         const size_t out_feat,
-        const size_t num_expert) {
+        const size_t num_expert,
+		CudaStreamManager* smgr) {
 	scalar_t alpha = 1, beta = 0; 
 
 	for (int i = 0, ptr = 0; i < num_expert; ++i) {
@@ -134,7 +126,8 @@ void moe_cuda_forward_impl(
 			continue;
 		}
 		// Use T(B) x T(A) = T(C) to produce row-major C
-		checkCudaErrors(cublasXgemm(smgr.handles[i],
+		checkCudaErrors(cublasXgemm(
+				smgr->handle(i),
 				CUBLAS_OP_T,
 				CUBLAS_OP_N,
 				out_feat, expert_count[i], in_feat,
@@ -147,7 +140,7 @@ void moe_cuda_forward_impl(
 
 		ptr += expert_count[i];
 	}
-	smgr.sync();
+	smgr->sync(num_expert);
 }
 
 template <typename scalar_t>
@@ -161,8 +154,8 @@ void moe_cuda_backward_impl(
         const size_t batch_size,
         const size_t in_feat,
         const size_t out_feat,
-        const size_t num_expert) {
-	ENSURE_SMGR(smgr, num_expert);
+        const size_t num_expert,
+		CudaStreamManager* smgr) {
     scalar_t alpha = 1, beta = 0;
 
 	for (int i = 0, ptr = 0; i < num_expert; ++i) {
@@ -174,7 +167,8 @@ void moe_cuda_backward_impl(
 		// Use T(B) x T(A) = T(C) to produce row-major C
 
 		// Backward input: g_i = w @ g_o
-		checkCudaErrors(cublasXgemm(smgr.handles[i],
+		checkCudaErrors(cublasXgemm(
+				smgr->handle(i),
 				CUBLAS_OP_N,
 				CUBLAS_OP_N,
 				in_feat, expert_count[i], out_feat,
@@ -186,7 +180,8 @@ void moe_cuda_backward_impl(
 				));
 
 		// Backward weight: g_w = i @ g_o
-		checkCudaErrors(cublasXgemm(smgr.handles[i],
+		checkCudaErrors(cublasXgemm(
+				smgr->handle(i),
 				CUBLAS_OP_N,
 				CUBLAS_OP_T,
 				in_feat, out_feat, expert_count[i],
@@ -199,7 +194,7 @@ void moe_cuda_backward_impl(
 
 		ptr += expert_count[i];
 	}
-	smgr.sync();
+	smgr->sync(num_expert);
 }
 
 
@@ -229,6 +224,7 @@ std::vector<torch::Tensor> moe_cuda_expert_count(
 std::vector<torch::Tensor> moe_cuda_local_scatter(
     torch::Tensor input,
 	torch::Tensor pos) {
+	auto smgr = getCudaStreamManager(input.device().index());
 	const auto batch_size = input.size(0);
     const auto in_feat = input.size(1);
 
@@ -241,7 +237,8 @@ std::vector<torch::Tensor> moe_cuda_local_scatter(
 			pos.data_ptr<int>(),
 			input_buf.data_ptr<scalar_t>(),
 			batch_size,
-			in_feat);
+			in_feat,
+			smgr);
 	}));
 	return {input_buf,};
 }
@@ -249,6 +246,7 @@ std::vector<torch::Tensor> moe_cuda_local_scatter(
 std::vector<torch::Tensor> moe_cuda_local_gather(
 	torch::Tensor output_buf,
 	torch::Tensor pos) {
+	auto smgr = getCudaStreamManager(output_buf.device().index());
 	const auto batch_size = output_buf.size(0);
     const auto out_feat = output_buf.size(1);
 
@@ -261,7 +259,8 @@ std::vector<torch::Tensor> moe_cuda_local_gather(
 			pos.data_ptr<int>(),
 			output.data_ptr<scalar_t>(),
 			batch_size,
-			out_feat);
+			out_feat,
+			smgr);
 	}));
 	return {output,};
 }
@@ -271,6 +270,7 @@ std::vector<torch::Tensor> moe_cuda_forward(
         torch::Tensor weight,
 		torch::Tensor expert_count
 		) {
+	auto smgr = getCudaStreamManager(input_buf.device().index());
 	const auto batch_size = input_buf.size(0);
     const auto num_expert = weight.size(0);
     const auto out_feat = weight.size(1);
@@ -280,12 +280,6 @@ std::vector<torch::Tensor> moe_cuda_forward(
     printf("[forward] expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", 
 			num_expert, in_feat, out_feat);
 #endif
-	/*
-    const int device = device_of(input).value().index();
-    if (smgr.streams == NULL) {
-        smgr.setup(num_expert, device);
-    }
-	*/
 	auto out_options = torch::TensorOptions()
 		.device(input_buf.device())
 		.dtype(input_buf.dtype());
@@ -300,7 +294,8 @@ std::vector<torch::Tensor> moe_cuda_forward(
 			output.data_ptr<scalar_t>(),
 			in_feat,
 			out_feat,
-			num_expert
+			num_expert,
+			smgr
 		);
     }));
     
@@ -313,6 +308,7 @@ std::vector<torch::Tensor> moe_cuda_backward(
     torch::Tensor weight, // [num_expert x out_feat x in_feat]
 	torch::Tensor expert_count
 ) {
+	auto smgr = getCudaStreamManager(input_buf.device().index());
     const auto batch_size = input_buf.size(0);
     const auto num_expert = weight.size(0);
     const auto out_feat = weight.size(1);
@@ -338,7 +334,8 @@ std::vector<torch::Tensor> moe_cuda_backward(
             batch_size,
             in_feat,
             out_feat,
-            num_expert
+            num_expert,
+			smgr
         );
     }));
 
