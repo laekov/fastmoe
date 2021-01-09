@@ -36,7 +36,7 @@ void generate_ptr_offset_kernel(size_t n, const scalar_t* base, size_t stride,
 
 template <typename scalar_t>
 __global__
-void batch_scatter_kernel(int wid, int* pos, 
+void batch_scatter_kernel(size_t wid, const int* pos, 
 		const scalar_t* inbuf, scalar_t* oubuf) { 
 	inbuf += wid * blockIdx.x;
 	oubuf += wid * pos[blockIdx.x];
@@ -45,39 +45,14 @@ void batch_scatter_kernel(int wid, int* pos,
 	}
 }
 
-template <typename scalar_t>
-__global__
-void batch_gather_kernel(int wid, int* pos, 
-		const scalar_t* inbuf, scalar_t* oubuf) { 
-	inbuf += wid * pos[blockIdx.x];
-	oubuf += wid * blockIdx.x;
-	for (int i = threadIdx.x; i < wid; i += blockDim.x) {
-		oubuf[i] = inbuf[i];
-	}
-}
-
-
-template <typename scalar_t>
-void moe_cuda_forward_impl(
-        const scalar_t* input,
+void moe_cuda_expert_count_impl(
         const int* d_gate,
-        const scalar_t* weight,
-        scalar_t* output,
-        const size_t batch_size,
-        const size_t in_feat,
-        const size_t out_feat,
-        const size_t num_expert, 
-		cublasOperation_t transb) {
-
-	scalar_t *input_buf, *output_buf;
-
-	checkCudaErrors(cudaMalloc(&input_buf, sizeof(scalar_t) * batch_size *
-				in_feat));
-	checkCudaErrors(cudaMalloc(&output_buf, sizeof(scalar_t) * batch_size *
-				out_feat));
-
+		int* expert_count,
+		int* d_pos,
+		const size_t num_expert,
+        const size_t batch_size) {
     int *gate = new int[batch_size];
-	int *expert_count = new int[num_expert], *expert_ptr = new int[num_expert];
+	int *expert_ptr = new int[num_expert];
 	memset(expert_count, 0, sizeof(int) * num_expert);
 
 	checkCudaErrors(cudaMemcpy(gate, d_gate, sizeof(int) * batch_size,
@@ -92,19 +67,65 @@ void moe_cuda_forward_impl(
 	}
 
 	int *pos = new int[batch_size];
-	int *d_pos;
-	checkCudaErrors(cudaMalloc(&d_pos, sizeof(int) * batch_size));
 
 	for (int i = 0; i < batch_size; ++i) {
 		pos[i] = expert_ptr[gate[i]]++;
 	}
 	checkCudaErrors(cudaMemcpy(d_pos, pos, sizeof(int) * batch_size,
 				cudaMemcpyHostToDevice));
+	delete [] gate;
+	delete [] expert_ptr;
 
+	ENSURE_SMGR(smgr, num_expert);
+}
+
+template <typename scalar_t>
+void moe_cuda_local_scatter_impl(
+        const scalar_t* input,
+		const int* d_pos,
+		scalar_t* input_buf,
+		const size_t batch_size,
+		const size_t in_feat) {
 	batch_scatter_kernel<scalar_t>
 		<<<batch_size, 256, 0, smgr.streams[0]>>>(in_feat, d_pos, input,
 				input_buf); 
 	smgr.sync(0);
+}
+
+template <typename scalar_t>
+__global__
+void batch_gather_kernel(size_t wid, const int* pos, 
+		const scalar_t* inbuf, scalar_t* oubuf) { 
+	inbuf += wid * pos[blockIdx.x];
+	oubuf += wid * blockIdx.x;
+	for (int i = threadIdx.x; i < wid; i += blockDim.x) {
+		oubuf[i] = inbuf[i];
+	}
+}
+
+template <typename scalar_t>
+void moe_cuda_local_gather_impl(
+        const scalar_t* output_buf,
+		const int* d_pos,
+		scalar_t* output,
+		const size_t batch_size,
+		const size_t out_feat) {
+	batch_gather_kernel<scalar_t>
+		<<<batch_size, 256, 0, smgr.streams[0]>>>(out_feat, d_pos, output_buf,
+				output); 
+	smgr.sync(0);
+}
+
+template <typename scalar_t>
+void moe_cuda_forward_impl(
+        const scalar_t* input_buf,
+        const scalar_t* weight,
+		const int* expert_count,
+        scalar_t* output_buf,
+        const size_t in_feat,
+        const size_t out_feat,
+        const size_t num_expert, 
+		cublasOperation_t transb) {
 
 	scalar_t alpha = 1, beta = 0; 
 
@@ -126,17 +147,7 @@ void moe_cuda_forward_impl(
 
 		ptr += expert_count[i];
 	}
-
-	batch_gather_kernel<scalar_t>
-		<<<batch_size, 256, 0, smgr.streams[0]>>>(out_feat, d_pos, output_buf,
-				output); 
-	smgr.sync(0);
-
-	cudaFree(input_buf);
-	cudaFree(output_buf);
-	cudaFree(d_pos);
-	delete [] pos;
-	delete [] gate;
+	smgr.sync();
 }
 
 template <typename scalar_t>
@@ -176,37 +187,107 @@ void moe_cuda_grad_weight(
     delete[] gate_host;
 }
 
+
+std::vector<torch::Tensor> moe_cuda_expert_count(
+		torch::Tensor weight,
+		torch::Tensor gate) {
+	const auto batch_size = gate.size(0);
+	const auto num_expert = weight.size(0);
+
+	auto ec_options = torch::TensorOptions().dtype(torch::kInt32);
+	auto expert_count = torch::empty(num_expert, ec_options);
+
+	auto pos_options = torch::TensorOptions()
+		.device(gate.device())
+		.dtype(torch::kInt32);
+	auto pos = torch::empty(batch_size, pos_options);
+	moe_cuda_expert_count_impl(
+			gate.data_ptr<int>(),
+			expert_count.data_ptr<int>(),
+			pos.data_ptr<int>(),
+			num_expert,
+			batch_size);
+
+	return {expert_count, pos};
+}
+
+std::vector<torch::Tensor> moe_cuda_local_scatter(
+    torch::Tensor input,
+	torch::Tensor pos) {
+	const auto batch_size = input.size(0);
+    const auto in_feat = input.size(1);
+
+	auto input_buf = torch::empty_like(input);
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_local_scatter_cuda", 
+			([&] {
+		moe_cuda_local_scatter_impl<scalar_t>(
+			input.data_ptr<scalar_t>(),
+			pos.data_ptr<int>(),
+			input_buf.data_ptr<scalar_t>(),
+			batch_size,
+			in_feat);
+	}));
+	return {input_buf,};
+}
+
+std::vector<torch::Tensor> moe_cuda_local_gather(
+	torch::Tensor output_buf,
+	torch::Tensor pos) {
+	const auto batch_size = output_buf.size(0);
+    const auto out_feat = output_buf.size(1);
+
+	auto output = torch::empty_like(output_buf);
+
+    AT_DISPATCH_FLOATING_TYPES(output_buf.scalar_type(), "moe_local_gather_cuda", 
+			([&] {
+		moe_cuda_local_gather_impl<scalar_t>(
+			output_buf.data_ptr<scalar_t>(),
+			pos.data_ptr<int>(),
+			output.data_ptr<scalar_t>(),
+			batch_size,
+			out_feat);
+	}));
+	return {output,};
+}
+
 std::vector<torch::Tensor> moe_cuda_forward(
-        torch::Tensor input,
-        torch::Tensor gate,
-        torch::Tensor weight
+        torch::Tensor input_buf,
+        torch::Tensor weight,
+		torch::Tensor expert_count
 		) {
-    const auto batch_size = input.size(0);
+	const auto batch_size = input_buf.size(0);
     const auto num_expert = weight.size(0);
     const auto out_feat = weight.size(1);
     const auto in_feat = weight.size(2);
             
 #ifdef MOE_DEBUG
-    printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
+    printf("[forward] expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", 
+			num_expert, in_feat, out_feat);
 #endif
+	/*
     const int device = device_of(input).value().index();
     if (smgr.streams == NULL) {
         smgr.setup(num_expert, device);
     }
-    auto output = input.new_zeros({batch_size, out_feat});
+	*/
+	auto out_options = torch::TensorOptions()
+		.device(input_buf.device())
+		.dtype(input_buf.dtype());
+    auto output = torch::empty({batch_size, out_feat}, out_options);
     
-    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_forward_cuda", ([&] {
-                moe_cuda_forward_impl<scalar_t>(
-                    input.data_ptr<scalar_t>(),
-                    gate.data_ptr<int>(),
-                    weight.data_ptr<scalar_t>(),
-                    output.data_ptr<scalar_t>(),
-                    batch_size,
-                    in_feat,
-                    out_feat,
-                    num_expert,
-					CUBLAS_OP_T
-                );
+    AT_DISPATCH_FLOATING_TYPES(input_buf.scalar_type(), "moe_forward_cuda", 
+			([&] {
+		moe_cuda_forward_impl<scalar_t>(
+			input_buf.data_ptr<scalar_t>(),
+			weight.data_ptr<scalar_t>(),
+			expert_count.data_ptr<int>(),
+			output.data_ptr<scalar_t>(),
+			in_feat,
+			out_feat,
+			num_expert,
+			CUBLAS_OP_T
+		);
     }));
     
     return {output, };           

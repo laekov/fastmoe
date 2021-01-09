@@ -16,7 +16,7 @@ public:
     cudaStream_t* streams;
 
 public:
-    CudaStreamManager() : num_expert(0), device(0), streams(NULL) {
+    CudaStreamManager() : num_expert(0), streams(NULL) {
         int current_device;
         checkCudaErrors(cudaGetDevice(&current_device));
 #ifdef MOE_DEBUG
@@ -24,21 +24,7 @@ public:
 #endif
     }
 
-    void setup(const size_t num_expert, const int device) {
-#ifdef MOE_DEBUG
-        printf("setup at device %d\n", device);
-#endif
-        this->num_expert = num_expert;
-        this->device = device;
-        checkCudaErrors(cudaSetDevice(device));        
-        streams = new cudaStream_t[num_expert];
-        handles = new cublasHandle_t[num_expert];
-        for (size_t i=0; i<num_expert; ++i) {
-            checkCudaErrors(cudaStreamCreate(streams+i));
-			checkCudaErrors(cublasCreate(handles + i));
-			cublasSetStream(handles[i], streams[i]);
-		}
-    }
+    void setup(const size_t num_expert, const int device=-1);
 
     ~CudaStreamManager() {
 #ifdef MOE_DEBUG
@@ -53,6 +39,12 @@ public:
 
 	void sync(int=-1);
 }; 
+
+#define ENSURE_SMGR(__smgr__, __num_expert__) { \
+	if (__smgr__.num_expert == 0) { \
+		__smgr__.setup(__num_expert__); \
+	} \
+}
 
 // CudaStreamManager* getCudaStreamManager(const size_t num_expert, const int device);
 
