@@ -10,6 +10,12 @@
 
 class CudaStreamManager {
 public:
+    size_t num_expert;
+    int device;
+    cublasHandle_t* handles;
+    cudaStream_t* streams;
+
+public:
     CudaStreamManager() : num_expert(0), device(0), streams(NULL) {
         int current_device;
         checkCudaErrors(cudaGetDevice(&current_device));
@@ -26,10 +32,12 @@ public:
         this->device = device;
         checkCudaErrors(cudaSetDevice(device));        
         streams = new cudaStream_t[num_expert];
-        checkCudaErrors(cublasCreate(&handle));
+        handles = new cublasHandle_t[num_expert];
         for (size_t i=0; i<num_expert; ++i) {
             checkCudaErrors(cudaStreamCreate(streams+i));
-        }
+			checkCudaErrors(cublasCreate(handles + i));
+			cublasSetStream(handles[i], streams[i]);
+		}
     }
 
     ~CudaStreamManager() {
@@ -38,14 +46,12 @@ public:
 #endif
         for (size_t i=0; i<num_expert; ++i) {
             checkCudaErrors(cudaStreamDestroy(*(streams+i)));
-        }
-        checkCudaErrors(cublasDestroy(handle));
+			checkCudaErrors(cublasDestroy(handles[i]));
+		}
         delete[] streams;
     }
-    size_t num_expert;
-    int device;
-    cublasHandle_t handle;
-    cudaStream_t* streams;
+
+	void sync(int=-1);
 }; 
 
 // CudaStreamManager* getCudaStreamManager(const size_t num_expert, const int device);

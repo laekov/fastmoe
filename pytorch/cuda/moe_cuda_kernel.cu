@@ -147,7 +147,7 @@ void moe_cuda_forward_impl(
 				in_feat);
 #endif
 		// Use T(B) x T(A) = T(C) to produce row-major C
-		checkCudaErrors(cublasXgemm(smgr.handle, // h->getHandle(i),
+		checkCudaErrors(cublasXgemm(smgr.handles[0], // h->getHandle(i),
 				CUBLAS_OP_T,
 				CUBLAS_OP_N,
 				out_feat, expert_count[i], in_feat,
@@ -204,7 +204,7 @@ void moe_cuda_grad_weight(
     checkCudaErrors(cudaMemcpy(gate_host, gate, batch_size * sizeof(int), cudaMemcpyDeviceToHost));
     for (size_t i=0; i<batch_size; ++i) {
         // checkCudaErrors(cublasSetStream);
-        checkCudaErrors(cublasXgemm(smgr.handle,
+        checkCudaErrors(cublasXgemm(smgr.handles[0],
             CUBLAS_OP_N, 
             CUBLAS_OP_T,
             out_feat, 
