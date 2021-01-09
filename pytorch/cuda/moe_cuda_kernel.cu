@@ -69,10 +69,6 @@ void moe_cuda_forward_impl(
         const size_t num_expert, 
 		cublasOperation_t transb) {
 
-#ifdef MOE_BREAKDOWN
-	timestamp(t_init);
-#endif
-
 	scalar_t *input_buf, *output_buf;
 
 	checkCudaErrors(cudaMalloc(&input_buf, sizeof(scalar_t) * batch_size *
@@ -80,24 +76,12 @@ void moe_cuda_forward_impl(
 	checkCudaErrors(cudaMalloc(&output_buf, sizeof(scalar_t) * batch_size *
 				out_feat));
 
-#ifdef MOE_BREAKDOWN
-	timestamp(t_malloc);
-	fprintf(stderr, "Malloc time %.3lf us\n", getDuration(t_init, t_malloc) *
-			1e6);
-#endif
-
     int *gate = new int[batch_size];
 	int *expert_count = new int[num_expert], *expert_ptr = new int[num_expert];
 	memset(expert_count, 0, sizeof(int) * num_expert);
 
 	checkCudaErrors(cudaMemcpy(gate, d_gate, sizeof(int) * batch_size,
 				cudaMemcpyDeviceToHost));
-
-#ifdef MOE_BREAKDOWN
-	timestamp(t_cpy);
-	fprintf(stderr, "Copy time %.3lf us\n", getDuration(t_malloc, t_cpy) *
-			1e6);
-#endif
 
 	for (int i = 0; i < batch_size; ++i) {
 		++expert_count[gate[i]];
@@ -117,23 +101,10 @@ void moe_cuda_forward_impl(
 	checkCudaErrors(cudaMemcpy(d_pos, pos, sizeof(int) * batch_size,
 				cudaMemcpyHostToDevice));
 
-#ifdef MOE_BREAKDOWN
-	timestamp(t_expert);
-	fprintf(stderr, "Expert asn time %.3lf us\n", getDuration(t_cpy, t_expert) *
-			1e6);
-#endif
-
 	batch_scatter_kernel<scalar_t>
 		<<<batch_size, 256, 0, smgr.streams[0]>>>(in_feat, d_pos, input,
 				input_buf); 
-	// smgr.sync(0);
-
-#ifdef MOE_BREAKDOWN
-	// h->sync();
-	timestamp(t_scatter);
-	fprintf(stderr, "Scatter time %.3lf us\n", getDuration(t_expert, t_scatter) *
-			1e6);
-#endif
+	smgr.sync(0);
 
 	scalar_t alpha = 1, beta = 0; 
 
@@ -141,13 +112,8 @@ void moe_cuda_forward_impl(
 		if (expert_count[i] == 0) {
 			continue;
 		}
-#ifdef MOE_DEBUG_SCATTER
-		fprintf(stderr, "gemm %d sz %d\n", i, expert_count[i]);
-		fprintf(stderr, "GeMM %d x %d x %d\n", out_feat, expert_count[i],
-				in_feat);
-#endif
 		// Use T(B) x T(A) = T(C) to produce row-major C
-		checkCudaErrors(cublasXgemm(smgr.handles[0], // h->getHandle(i),
+		checkCudaErrors(cublasXgemm(smgr.handles[i],
 				CUBLAS_OP_T,
 				CUBLAS_OP_N,
 				out_feat, expert_count[i], in_feat,
@@ -161,25 +127,10 @@ void moe_cuda_forward_impl(
 		ptr += expert_count[i];
 	}
 
-#ifdef MOE_BREAKDOWN
-	timestamp(t_mm);
-	fprintf(stderr, "GeMM time %.3lf us\n", getDuration(t_scatter, t_mm) *
-			1e6);
-#endif
-
-	// h->sync();
 	batch_gather_kernel<scalar_t>
 		<<<batch_size, 256, 0, smgr.streams[0]>>>(out_feat, d_pos, output_buf,
 				output); 
-	// h->sync(0);
-
-#ifdef MOE_BREAKDOWN
-	timestamp(t_gather);
-	fprintf(stderr, "Gather time %.3lf us\n", getDuration(t_mm, t_gather) *
-			1e6);
-	fprintf(stderr, "Overall time %.3lf us\n", getDuration(t_init, t_gather) *
-			1e6);
-#endif
+	smgr.sync(0);
 
 	cudaFree(input_buf);
 	cudaFree(output_buf);

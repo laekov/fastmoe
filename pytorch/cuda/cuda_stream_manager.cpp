@@ -9,7 +9,7 @@ void CudaStreamManager::sync(int i) {
 		cudaStreamSynchronize(streams[i]);
 		return;
 	}
-	for (size_t i=0; i<MAX_STREAMS; ++i) {
+	for (size_t i = 0; i < this->num_expert; ++i) {
 		cudaStreamSynchronize(streams[i]);
 	}
 }

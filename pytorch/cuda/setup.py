@@ -11,7 +11,7 @@ setup(
             name='moe_cuda', 
             sources=[
                 'moe.cpp',
-                # 'cuda_stream_manager.cpp',
+                'cuda_stream_manager.cpp',
                 'moe_cuda_kernel.cu',
                 ],
             extra_compile_args={'cxx': ['-I{}'.format(CUDA_HELPER)],
