@@ -25,6 +25,7 @@ public:
     }
 
     void setup(const size_t num_expert, const int device=-1);
+	cudaStream_t stream(size_t=0);
 
     ~CudaStreamManager() {
 #ifdef MOE_DEBUG

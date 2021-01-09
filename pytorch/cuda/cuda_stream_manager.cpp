@@ -4,6 +4,13 @@
 
 #include "cuda_stream_manager.h"
 
+cudaStream_t CudaStreamManager::stream(size_t idx) {
+	if (num_expert <= idx) {
+		this->setup(idx + 1);
+	}
+	return this->streams[idx];
+}
+
 void CudaStreamManager::sync(int i) {
 	if (i > -1) {
 		cudaStreamSynchronize(streams[i]);
@@ -28,7 +35,7 @@ void CudaStreamManager::setup(const size_t num_expert, const int device) {
 	streams = new cudaStream_t[num_expert];
 	handles = new cublasHandle_t[num_expert];
 	for (size_t i=0; i<num_expert; ++i) {
-		checkCudaErrors(cudaStreamCreate(streams+i));
+		checkCudaErrors(cudaStreamCreate(streams + i));
 		checkCudaErrors(cublasCreate(handles + i));
 		cublasSetStream(handles[i], streams[i]);
 	}

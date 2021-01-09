@@ -108,7 +108,6 @@ def test():
     raw_out = test_module(moe_raw, linear, inp.clone(), gate.clone())
 
     names = ['Out', 'Moe wei', 'Linear wei', 'Linear bias']
-    names = ['Out']
     for name, mo, ro in zip(names, moe_out, raw_out):
         err = (mo - ro).abs().sum()
         print('{} abs err {}'.format(name, err))

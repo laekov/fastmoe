@@ -21,7 +21,9 @@
 // #define MOE_BREAKDOWN
 // #define MOE_DEBUG
 
-thread_local CudaStreamManager smgr;
+// thread_local CudaStreamManager smgr;
+// TODO: handle stream manager faults with torch threads
+CudaStreamManager smgr;
 
 template <typename scalar_t>
 __global__
@@ -87,7 +89,7 @@ void moe_cuda_local_scatter_impl(
 		const size_t batch_size,
 		const size_t in_feat) {
 	batch_scatter_kernel<scalar_t>
-		<<<batch_size, 256, 0, smgr.streams[0]>>>(in_feat, d_pos, input,
+		<<<batch_size, 256, 0, smgr.stream(0)>>>(in_feat, d_pos, input,
 				input_buf); 
 	smgr.sync(0);
 }
@@ -111,7 +113,7 @@ void moe_cuda_local_gather_impl(
 		const size_t batch_size,
 		const size_t out_feat) {
 	batch_gather_kernel<scalar_t>
-		<<<batch_size, 256, 0, smgr.streams[0]>>>(out_feat, d_pos, output_buf,
+		<<<batch_size, 256, 0, smgr.stream(0)>>>(out_feat, d_pos, output_buf,
 				output); 
 	smgr.sync(0);
 }
