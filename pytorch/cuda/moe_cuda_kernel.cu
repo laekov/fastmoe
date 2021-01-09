@@ -58,12 +58,10 @@ template <typename scalar_t>
 void moe_cuda_forward_impl(
         const scalar_t* input,
         const int* d_gate,
-        const scalar_t* weight1,
-        const scalar_t* weight2,
+        const scalar_t* weight,
         scalar_t* output,
         const size_t batch_size,
         const size_t in_feat,
-        const size_t hidden_feat,
         const size_t out_feat,
         const size_t num_expert) {
 
@@ -73,14 +71,12 @@ void moe_cuda_forward_impl(
 	timestamp(t_init);
 #endif
 
-	scalar_t *input_buf, *hidden_buf, *output_buf;
+	scalar_t *input_buf, *output_buf;
 
 	checkCudaErrors(cudaMalloc(&input_buf, sizeof(scalar_t) * batch_size *
 				in_feat));
 	checkCudaErrors(cudaMalloc(&output_buf, sizeof(scalar_t) * batch_size *
 				out_feat));
-	checkCudaErrors(cudaMalloc(&hidden_buf, sizeof(scalar_t) * batch_size *
-				hidden_feat));
 
 #ifdef MOE_BREAKDOWN
 	timestamp(t_malloc);
@@ -152,21 +148,10 @@ void moe_cuda_forward_impl(
 		checkCudaErrors(cublasXgemm(h->getHandle(i),
 				CUBLAS_OP_T,
 				CUBLAS_OP_N,
-				hidden_feat, expert_count[i], in_feat,
+				out_feat, expert_count[i], in_feat,
 				&alpha,
-				weight1 + i * in_feat * hidden_feat, in_feat,
+				weight + i * in_feat * out_feat, in_feat,
 				input_buf + ptr * in_feat, in_feat,
-				&beta,
-				hidden_buf + hidden_feat * ptr, hidden_feat
-				));
-
-		checkCudaErrors(cublasXgemm(h->getHandle(i),
-				CUBLAS_OP_T,
-				CUBLAS_OP_N,
-				out_feat, expert_count[i], hidden_feat,
-				&alpha,
-				weight2 + i * hidden_feat * out_feat, hidden_feat,
-				hidden_buf + hidden_feat * ptr, hidden_feat,
 				&beta,
 				output_buf + out_feat * ptr, out_feat
 				));
@@ -195,7 +180,6 @@ void moe_cuda_forward_impl(
 #endif
 
 	cudaFree(input_buf);
-	cudaFree(hidden_buf);
 	cudaFree(output_buf);
 	cudaFree(d_pos);
 	delete [] pos;
@@ -244,17 +228,15 @@ void moe_cuda_grad_weight(
 std::vector<torch::Tensor> moe_cuda_forward(
         torch::Tensor input,
         torch::Tensor gate,
-        torch::Tensor weight1,
-        torch::Tensor weight2
+        torch::Tensor weight
 		) {
     const auto batch_size = input.size(0);
-    const auto num_expert = weight1.size(0);
-    const auto out_feat = weight2.size(1);
-	const auto hidden_feat = weight1.size(1);
-    const auto in_feat = weight1.size(2);
+    const auto num_expert = weight.size(0);
+    const auto out_feat = weight.size(1);
+    const auto in_feat = weight.size(2);
             
 #ifdef MOE_DEBUG
-    printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, hidden_feat = %ld,out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, hidden_feat, out_feat);
+    printf("[forward] b=%ld, expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", batch_size, num_expert, in_feat, out_feat);
 #endif
     auto output = input.new_zeros({batch_size, out_feat});
     
@@ -262,12 +244,10 @@ std::vector<torch::Tensor> moe_cuda_forward(
                 moe_cuda_forward_impl<scalar_t>(
                     input.data_ptr<scalar_t>(),
                     gate.data_ptr<int>(),
-                    weight1.data_ptr<scalar_t>(),
-                    weight2.data_ptr<scalar_t>(),
+                    weight.data_ptr<scalar_t>(),
                     output.data_ptr<scalar_t>(),
                     batch_size,
                     in_feat,
-					hidden_feat,
                     out_feat,
                     num_expert
                 );
