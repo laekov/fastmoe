@@ -16,21 +16,21 @@ class MOEFunction(Function):
         output_buf, = moe_cuda.forward(input_buf, weight, expert_count)
         output = moe_cuda.local_gather(output_buf, pos)
 
-        variables = [inp, gate, weight, expert_count, pos]
+        variables = [input_buf, gate, weight, expert_count, pos]
         ctx.save_for_backward(*variables)
 
         return output[0]
 
     @staticmethod
     def backward(ctx, grad_out):
-        # print("grad_out", grad_out)
-        # print("input", ctx.saved_tensors[0])
-        grad_inp, grad_weight = moe_cuda.backward(
-            grad_out.contiguous(), *ctx.saved_tensors)
-        out_feat, in_feat = grad_weight.size()[1:]
-        # print("grad_weight_column_major", grad_weight.flatten())
-        grad_weight_row_major = grad_weight.view(-1, in_feat, out_feat).transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
-        return grad_inp, None, grad_weight_row_major
+        input_buf, gate, weight, expert_count, pos = ctx.saved_tensors
+
+        grad_out_buf, = moe_cuda.local_scatter(grad_out.contiguous(), pos)
+        grad_inp_buf, grad_weight = moe_cuda.backward(
+                grad_out_buf, input_buf, weight, expert_count)
+        grad_inp, = moe_cuda.local_gather(grad_inp_buf, pos)
+
+        return grad_inp, None, grad_weight
 
 
 class MOELayer(nn.Module):
@@ -82,9 +82,6 @@ def test_module(moe, linear, inp, gate):
     moe.zero_grad()
     x = linear(inp)
     output = moe(x, gate)
-    print(output)
-    return output
-    print(output)
     y = output.mean()
     y.backward()
     return output, moe.weight.grad, linear.weight.grad, linear.bias.grad

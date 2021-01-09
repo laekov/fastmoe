@@ -22,10 +22,10 @@ std::vector<torch::Tensor> moe_cuda_forward(
 	torch::Tensor expert_count);
 
 std::vector<torch::Tensor> moe_cuda_backward(
-    torch::Tensor grad_output,
-    torch::Tensor input,
-    torch::Tensor gate,
-	torch::Tensor weight);
+    torch::Tensor grad_output_buf,
+    torch::Tensor input_buf,
+    torch::Tensor weight,
+	torch::Tensor expert_count);
 
 // C++ interface
 
@@ -58,7 +58,7 @@ std::vector<torch::Tensor> moe_local_gather(
 
 std::vector<torch::Tensor> moe_forward(
         torch::Tensor input_buf,     // [batch_size x in_feat]
-        torch::Tensor weight,        // [num_expert x hidden_feat x in_feat]
+        torch::Tensor weight,        // [num_expert x out_feat x in_feat]
         torch::Tensor expert_count   // [batch_size]
         ) {
     CHECK_INPUT(input_buf);
@@ -72,21 +72,20 @@ std::vector<torch::Tensor> moe_forward(
 }
 
 std::vector<torch::Tensor> moe_backward(
-        torch::Tensor grad_output, // [batch_size x out_feat]
-        torch::Tensor input, // [batch_size x out_feat]
-        torch::Tensor gate,  // [batch_size]
-        torch::Tensor weight // [num_expert x out_feat x in_feat]
+        torch::Tensor grad_output_buf, // [batch_size x out_feat]
+        torch::Tensor input_buf,       // [batch_size x out_feat]
+        torch::Tensor weight,          // [num_expert x out_feat x in_feat]
+        torch::Tensor expert_count
         ) {
-    CHECK_INPUT(grad_output);
-    CHECK_INPUT(input);
-    CHECK_INPUT(gate);
+    CHECK_INPUT(grad_output_buf);
+    CHECK_INPUT(input_buf);
     CHECK_INPUT(weight);
     /*
         The bias term should have been merged into weight. Note the following fact that 
         Wx+b = [W b] [x]
                      [1]  
     */
-    return moe_cuda_backward(grad_output, input, gate, weight);
+    return moe_cuda_backward(grad_output_buf, input_buf, weight, expert_count);
 }
 
 
