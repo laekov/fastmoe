@@ -7,7 +7,7 @@
 
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <cublas_v2.h>                                                                                          
+#include <cublas_v2.h>
 #include <helper_cuda.h> 
 
 #include <mpi.h>
@@ -143,8 +143,9 @@ void moe_cuda_forward_impl(
 
 #ifdef MOE_BREAKDOWN
 	timestamp(t_expert);
-	fprintf(stderr, "Expert asn time %.3lf us\n", getDuration(t_init, t_expert) *
-			1e6);
+	fprintf(stderr, "Expert asn %d time %.3lf us\n", 
+			expert_sz,
+			getDuration(t_init, t_expert) * 1e6);
 #endif
 
 	batch_scatter_kernel<scalar_t>
