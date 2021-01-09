@@ -4,6 +4,9 @@ import time
 import sys
 
 
+dev_name = 'cuda:0'
+
+
 def perf():
     batch_size = int(sys.argv[1])
     in_feat = int(sys.argv[2])
@@ -11,10 +14,11 @@ def perf():
     num_expert = int(sys.argv[4])
 
 
-    inp = torch.rand(batch_size, in_feat).cuda("cuda:1")
-    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda("cuda:1")
+    inp = torch.rand(batch_size, in_feat).cuda(dev_name)
+    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), 
+            requires_grad=False).int().cuda(dev_name)
 
-    moe = MOELayer(num_expert, in_feat, out_feat).cuda("cuda:1")
+    moe = MOELayer(num_expert, in_feat, out_feat).cuda(dev_name)
 
     o = moe(inp, gate)
     o = moe(inp, gate)
@@ -28,7 +32,8 @@ def perf():
     maxt = 0.
     sqtot = 0.
     for i in range(n_runs):
-        gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda("cuda:1")
+        gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), 
+                requires_grad=False).int().cuda(dev_name)
         ts = time.time()
         o = moe(inp, gate)
         te = time.time()
