@@ -5,8 +5,7 @@
 #include <vector>
 
 std::vector<torch::Tensor> moe_cuda_expert_count(
-    torch::Tensor weight, // TODO: pass num-experts in another way?
-    torch::Tensor gate);
+    torch::Tensor gate, size_t num_expert);
 
 std::vector<torch::Tensor> moe_cuda_local_scatter(
     torch::Tensor input,
@@ -35,10 +34,10 @@ std::vector<torch::Tensor> moe_cuda_backward(
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
 std::vector<torch::Tensor> moe_expert_count(
-		torch::Tensor weight,
-		torch::Tensor gate) {
+		torch::Tensor gate, 
+		size_t num_expert) {
 	CHECK_INPUT(gate);
-	return moe_cuda_expert_count(weight, gate);
+	return moe_cuda_expert_count(gate, num_expert);
 }
 
 std::vector<torch::Tensor> moe_local_scatter(

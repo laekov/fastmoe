@@ -199,10 +199,9 @@ void moe_cuda_backward_impl(
 
 
 std::vector<torch::Tensor> moe_cuda_expert_count(
-		torch::Tensor weight,
-		torch::Tensor gate) {
+		torch::Tensor gate, 
+		size_t num_expert) {
 	const auto batch_size = gate.size(0);
-	const auto num_expert = weight.size(0);
 
 	auto ec_options = torch::TensorOptions().dtype(torch::kInt32);
 	auto expert_count = torch::empty(num_expert, ec_options);

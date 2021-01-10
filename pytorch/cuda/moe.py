@@ -11,7 +11,7 @@ class MOEFunction(Function):
     def forward(ctx, inp, gate, weight):
         # out_feat, in_feat = weight.size()[1:]
         # weight_column_major = weight.transpose(-1, -2).contiguous().view(-1, out_feat, in_feat)
-        expert_count, pos = moe_cuda.expert_count(weight, gate)
+        expert_count, pos = moe_cuda.expert_count(gate, weight.shape[0])
         input_buf, = moe_cuda.local_scatter(inp, pos)
         output_buf, = moe_cuda.forward(input_buf, weight, expert_count)
         output = moe_cuda.local_gather(output_buf, pos)
