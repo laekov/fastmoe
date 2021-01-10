@@ -3,44 +3,30 @@
 
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <helper_cuda.h> 
 
-
-#define MAX_STREAMS 16
-
-
-struct CudaStreamManager {
-    const size_t num_expert;
+class CudaStreamManager {
+public:
+    int device;
     cublasHandle_t* handles;
     cudaStream_t* streams;
 
-    CudaStreamManager(const size_t num_expert_) : num_expert(num_expert_) {
-        streams = new cudaStream_t[MAX_STREAMS];
-		handles = new cublasHandle_t[MAX_STREAMS];
-        for (size_t i=0; i<MAX_STREAMS; ++i) {
-			checkCudaErrors(cublasCreate(handles + i));
-			checkCudaErrors(cudaStreamCreate(streams + i));
-			checkCudaErrors(cublasSetStream(handles[i], streams[i]));
-		}
+public:
+    CudaStreamManager(int device_): device(device_) {
+		this->setup(device);
     }
+
+	void setup(int);
+	void sync(int=0);
+	void destroy();
+
+	cudaStream_t stream(size_t=0);
+	cublasHandle_t handle(size_t=0);
 
     ~CudaStreamManager() {
-        for (size_t i=0; i<MAX_STREAMS; ++i) {
-            checkCudaErrors(cudaStreamDestroy(streams[i]));
-			checkCudaErrors(cublasDestroy(handles[i]));
-		}
+		this->destroy();
     }
-
-	inline cudaStream_t& getStream(int idx) {
-		return streams[idx % MAX_STREAMS];
-	}
-	inline cublasHandle_t& getHandle(int idx) {
-		return handles[idx % MAX_STREAMS];
-	}
-
-	void sync(int=-1);
 }; 
 
-CudaStreamManager* getCudaStreamManager(const size_t num_expert);
+CudaStreamManager* getCudaStreamManager(const int device);
 
 #endif  // CUDA_STREAM_MANAGER 

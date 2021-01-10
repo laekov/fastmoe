@@ -4,17 +4,27 @@
 #include <iostream>
 #include <vector>
 
-std::vector<torch::Tensor> moe_cuda_forward(
+std::vector<torch::Tensor> moe_cuda_expert_count(
+    torch::Tensor gate, size_t num_expert);
+
+std::vector<torch::Tensor> moe_cuda_local_scatter(
     torch::Tensor input,
-    torch::Tensor gate,
-    torch::Tensor weight1,
-    torch::Tensor weight2);
+	torch::Tensor pos);
+
+std::vector<torch::Tensor> moe_cuda_local_gather(
+	torch::Tensor output_buf,
+	torch::Tensor pos);
+
+std::vector<torch::Tensor> moe_cuda_forward(
+    torch::Tensor input_buf,
+    torch::Tensor weight,
+	torch::Tensor expert_count);
 
 std::vector<torch::Tensor> moe_cuda_backward(
-    torch::Tensor grad_output,
-    torch::Tensor input,
-    torch::Tensor gate,
-	torch::Tensor weight);
+    torch::Tensor grad_output_buf,
+    torch::Tensor input_buf,
+    torch::Tensor weight,
+	torch::Tensor expert_count);
 
 // C++ interface
 
@@ -23,40 +33,58 @@ std::vector<torch::Tensor> moe_cuda_backward(
 #define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
-std::vector<torch::Tensor> moe_forward(
-        torch::Tensor input, // [batch_size x in_feat]
-        torch::Tensor gate,  // [batch_size]
-        torch::Tensor weight1, // [num_expert x hidden_feat x in_feat]
-        torch::Tensor weight2 // [num_expert x out_feat x hidden_feat]
-        ) {
-    CHECK_INPUT(input);
-    CHECK_INPUT(gate);
-    CHECK_INPUT(weight1);
-    CHECK_INPUT(weight2);
-    /*
-        The bias term should have been merged into weight. Note the following fact that 
-        Wx+b = [W b] [x]
-                     [1]  
-    */
-    return moe_cuda_forward(input, gate, weight1, weight2);
+std::vector<torch::Tensor> moe_expert_count(
+		torch::Tensor gate, 
+		size_t num_expert) {
+	CHECK_INPUT(gate);
+	return moe_cuda_expert_count(gate, num_expert);
 }
 
-std::vector<torch::Tensor> moe_backward(
-        torch::Tensor grad_output, // [batch_size x out_feat]
-        torch::Tensor input, // [batch_size x out_feat]
-        torch::Tensor gate,  // [batch_size]
-        torch::Tensor weight // [num_expert x out_feat x in_feat]
+std::vector<torch::Tensor> moe_local_scatter(
+		torch::Tensor input,
+		torch::Tensor pos) {
+	CHECK_INPUT(input);
+	return moe_cuda_local_scatter(input, pos);
+}
+
+std::vector<torch::Tensor> moe_local_gather(
+		torch::Tensor output_buf,
+		torch::Tensor pos) {
+	CHECK_INPUT(output_buf);
+	return moe_cuda_local_gather(output_buf, pos);
+}
+
+
+std::vector<torch::Tensor> moe_forward(
+        torch::Tensor input_buf,     // [batch_size x in_feat]
+        torch::Tensor weight,        // [num_expert x out_feat x in_feat]
+        torch::Tensor expert_count   // [batch_size]
         ) {
-    CHECK_INPUT(grad_output);
-    CHECK_INPUT(input);
-    CHECK_INPUT(gate);
+    CHECK_INPUT(input_buf);
     CHECK_INPUT(weight);
     /*
         The bias term should have been merged into weight. Note the following fact that 
         Wx+b = [W b] [x]
                      [1]  
     */
-    return moe_cuda_backward(grad_output, input, gate, weight);
+    return moe_cuda_forward(input_buf, weight, expert_count);
+}
+
+std::vector<torch::Tensor> moe_backward(
+        torch::Tensor grad_output_buf, // [batch_size x out_feat]
+        torch::Tensor input_buf,       // [batch_size x out_feat]
+        torch::Tensor weight,          // [num_expert x out_feat x in_feat]
+        torch::Tensor expert_count
+        ) {
+    CHECK_INPUT(grad_output_buf);
+    CHECK_INPUT(input_buf);
+    CHECK_INPUT(weight);
+    /*
+        The bias term should have been merged into weight. Note the following fact that 
+        Wx+b = [W b] [x]
+                     [1]  
+    */
+    return moe_cuda_backward(grad_output_buf, input_buf, weight, expert_count);
 }
 
 
@@ -72,6 +100,9 @@ int main() {
 */
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  m.def("expert_count", &moe_expert_count, "MoE expert count (CUDA)");
+  m.def("local_scatter", &moe_local_scatter, "MoE local scatter (CUDA)");
+  m.def("local_gather", &moe_local_gather, "MoE local gather (CUDA)");
   m.def("forward", &moe_forward, "MoE forward (CUDA)");
   m.def("backward", &moe_backward, "MoE backward (CUDA)");
 }
