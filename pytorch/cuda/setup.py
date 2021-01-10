@@ -12,15 +12,16 @@ setup(
             sources=[
                 'moe.cpp',
                 'cuda_stream_manager.cpp',
-                'comm_manager.cpp',
                 'moe_cuda_kernel.cu',
                 ],
             extra_compile_args={
                 'cxx': [
                     '-I{}'.format(CUDA_HELPER),
+                    '-DMOE_USE_NCCL'
                     ],
                 'nvcc': [
                     '-I{}'.format(CUDA_HELPER),
+                    '-DMOE_USE_NCCL'
                     ]
                 }
             )

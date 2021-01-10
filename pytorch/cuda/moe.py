@@ -102,8 +102,11 @@ def test():
     moe_raw.weight.data = moe.weight.data.clone()
 
     inp = torch.rand(batch_size, in_feat).cuda()
-    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), requires_grad=False).int().cuda()
-    gate = torch.Tensor([0, 1, 0, 1]).int().cuda()
+    gate = torch.randint(low=0, 
+            high=num_expert * torch.distributed.get_world_size(), 
+            size=(batch_size, ), 
+            requires_grad=False).int().cuda()
+    # gate = torch.Tensor([0, 1, 0, 1]).int().cuda()
 
     moe_out = test_module(moe, linear, inp.clone(), gate.clone())
     raw_out = test_module(moe_raw, linear, inp.clone(), gate.clone())

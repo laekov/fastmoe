@@ -26,5 +26,5 @@ then
 		done
 	done
 else
-	python3 $@ 2>logs/$OMPI_COMM_WORLD_RANK.log
+	python3 $@ # 2>logs/$OMPI_COMM_WORLD_RANK.log
 fi

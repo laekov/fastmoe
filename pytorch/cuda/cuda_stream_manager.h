@@ -4,11 +4,29 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
+#ifdef MOE_USE_NCCL
+#include <mpi.h>
+#include <nccl.h>
+
+#define NCCL_SAFE_CALL(__fn__) { \
+	auto __res__ = __fn__; \
+	if (__res__ != ncclSuccess) { \
+		fprintf(stderr, "NCCL Error at %s:%d value %d\n", __FILE__, __LINE__, __res__); \
+		exit(-1); \
+	} \
+}
+
+#endif
+
 class CudaStreamManager {
 public:
     int device;
     cublasHandle_t* handles;
     cudaStream_t* streams;
+#ifdef MOE_USE_NCCL
+	int rank, size;
+	ncclComm_t ncclcomm;
+#endif
 
 public:
     CudaStreamManager(int device_): device(device_) {

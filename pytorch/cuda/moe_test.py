@@ -4,7 +4,7 @@ import time
 import sys
 
 
-dev_name = 'cuda:0'
+dev_name = 'cuda:1'
 
 
 def perf():
@@ -16,7 +16,7 @@ def perf():
     out_feat = int(sys.argv[3])
     num_expert = int(sys.argv[4])
 
-    inp = torch.rand(batch_size, io_feat).cuda(dev_name)
+    inp = torch.rand(batch_size, in_feat).cuda(dev_name)
     gate = torch.randint(low=0, 
             high=num_expert * torch.distributed.get_world_size(), 
             size=(batch_size, ), requires_grad=False).int().cuda(dev_name)

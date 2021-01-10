@@ -4,29 +4,7 @@
 #include <iostream>
 #include <vector>
 
-std::vector<torch::Tensor> moe_cuda_expert_count(
-    torch::Tensor gate, size_t num_expert);
-
-std::vector<torch::Tensor> moe_cuda_local_scatter(
-    torch::Tensor input,
-	torch::Tensor pos);
-
-std::vector<torch::Tensor> moe_cuda_local_gather(
-	torch::Tensor output_buf,
-	torch::Tensor pos);
-
-std::vector<torch::Tensor> moe_cuda_forward(
-    torch::Tensor input_buf,
-    torch::Tensor weight,
-	torch::Tensor expert_count);
-
-std::vector<torch::Tensor> moe_cuda_backward(
-    torch::Tensor grad_output_buf,
-    torch::Tensor input_buf,
-    torch::Tensor weight,
-	torch::Tensor expert_count);
-
-// C++ interface
+#include "moe_cuda_kernel.h"
 
 // NOTE: AT_ASSERT has become AT_CHECK on master after 0.4.
 #define CHECK_CUDA(x) AT_ASSERTM(x.type().is_cuda(), #x " must be a CUDA tensor")
@@ -87,6 +65,31 @@ std::vector<torch::Tensor> moe_backward(
     return moe_cuda_backward(grad_output_buf, input_buf, weight, expert_count);
 }
 
+#ifdef MOE_USE_NCCL
+
+std::vector<torch::Tensor> moe_global_scatter(
+		torch::Tensor input_buf,
+		torch::Tensor local_expert_count,
+		torch::Tensor global_expert_count,
+		size_t batch_size, size_t n_workers) {
+	CHECK_INPUT(input_buf);
+	return moe_cuda_global_scatter(input_buf,
+		   	local_expert_count, global_expert_count,
+			batch_size, n_workers);
+}
+
+std::vector<torch::Tensor> moe_global_gather(
+		torch::Tensor output_buf,
+		torch::Tensor local_expert_count,
+		torch::Tensor global_expert_count,
+		size_t batch_size, size_t n_workers) {
+	CHECK_INPUT(output_buf);
+	return moe_cuda_global_gather(output_buf,
+		   	local_expert_count, global_expert_count,
+			batch_size, n_workers);
+}
+
+#endif
 
 /*
 int main() {
@@ -103,6 +106,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("expert_count", &moe_expert_count, "MoE expert count (CUDA)");
   m.def("local_scatter", &moe_local_scatter, "MoE local scatter (CUDA)");
   m.def("local_gather", &moe_local_gather, "MoE local gather (CUDA)");
+#ifdef MOE_USE_NCCL
+  m.def("global_scatter", &moe_global_scatter, "MoE global scatter (CUDA)");
+  m.def("global_gather", &moe_global_gather, "MoE global gather (CUDA)");
+#endif
   m.def("forward", &moe_forward, "MoE forward (CUDA)");
   m.def("backward", &moe_backward, "MoE backward (CUDA)");
 }

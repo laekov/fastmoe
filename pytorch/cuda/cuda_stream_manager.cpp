@@ -32,6 +32,17 @@ void CudaStreamManager::setup(const int device) {
 		checkCudaErrors(cublasCreate(handles + i));
 		cublasSetStream(handles[i], streams[i]);
 	}
+#ifdef MOE_USE_NCCL
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+	ncclUniqueId uid;
+	if (rank == 0) {
+		ncclGetUniqueId(&uid);
+	}
+	MPI_Bcast(&uid, sizeof(uid), MPI_BYTE, 0, MPI_COMM_WORLD);
+	NCCL_SAFE_CALL(ncclCommInitRank(&ncclcomm, size, uid, rank));
+#endif
 }
 
 void CudaStreamManager::destroy() {
