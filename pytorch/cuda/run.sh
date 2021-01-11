@@ -8,7 +8,7 @@ export PYTHONPATH=$PWD/build/lib.linux-x86_64-3.7
 export LD_LIBRARY_PATH=/home/laekov/.local/lib/python3.7/site-packages/torch/lib:$LD_LIBRARY_PATH
 if [ -z $1 ]
 then
-	python3 moe.py
+	python3 moe_test.py
 elif [ .$1 = '.test_all' ]
 then
 	for nexp in 1 2 4 
