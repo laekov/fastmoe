@@ -82,6 +82,35 @@ void moe_cuda_expert_count_impl(
 
 #ifdef MOE_USE_NCCL
 
+void moe_cuda_expert_exchange_impl(
+		const int* local_expert_count, 
+		int* global_expert_count, 
+		int* fwd_expert_count, 
+		int num_expert, int world_size) {
+	MPI_Alltoall(local_expert_count, num_expert, MPI_INT, 
+			global_expert_count, num_expert, MPI_INT, MPI_COMM_WORLD);
+	for (int i = 0; i < num_expert; ++i) {
+		for (int j = 0; j < world_size; ++j) {
+			fwd_expert_count[i] += global_expert_count[i + j * num_expert];
+		}
+	}
+}
+
+std::vector<torch::Tensor> moe_cuda_expert_exchange(
+		torch::Tensor local_expert_count,
+		long num_expert, long n_workers) {
+    auto global_expert_count = torch::empty_like(local_expert_count);
+	auto fwe_options = torch::TensorOptions()
+		.dtype(local_expert_count.dtype());
+    auto fwd_expert_count = torch::zeros({num_expert}, fwe_options);
+	moe_cuda_expert_exchange_impl(
+			local_expert_count.data_ptr<int>(),
+			global_expert_count.data_ptr<int>(),
+			fwd_expert_count.data_ptr<int>(),
+			num_expert, n_workers);
+	return {global_expert_count, fwd_expert_count};
+}
+
 template<typename scalar_t>
 void moe_cuda_global_scatter_impl(
 	const scalar_t* local_input_buf,

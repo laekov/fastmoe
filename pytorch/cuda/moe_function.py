@@ -35,53 +35,56 @@ class MOEGlobal(Function):
 
         local_expert_count, pos = moe_cuda.expert_count(gate, 
                 world_size * num_expert)
-        global_expert_count = torch.empty_like(world_size, num_expert)
-        torch.distributed.all_to_all(global_expert_count,
-                local_expert_count.reshape(world_size, num_expert))
-        batch_size = int(global_expert_count.sum().item())
+        global_expert_count, fwd_expert_count = moe_cuda.expert_exchange(
+                local_expert_count, num_expert, world_size)
+        fwd_batch_size = int(fwd_expert_count.sum().item())
 
         local_input_buf, = moe_cuda.local_scatter(inp, pos)
         global_input_buf, = moe_cuda.global_scatter(local_input_buf, 
                 local_expert_count, global_expert_count,
-                batch_size, world_size)
+                fwd_batch_size, world_size)
 
-        global_output_buf, = moe_cuda.forward(input_buf, weight, expert_count)
+        global_output_buf, = moe_cuda.forward(global_input_buf, weight, 
+                fwd_expert_count)
 
         local_output_buf, = moe_cuda.global_gather(global_output_buf,
                 local_expert_count, global_expert_count,
                 inp.shape[0], world_size)
-        output = moe_cuda.local_gather(local_output_buf, pos)
+        output, = moe_cuda.local_gather(local_output_buf, pos)
 
-        variables = [input_buf, gate, weight, 
-                local_expert_count, global_expert_count, 
-                pos, num_expert, batch_size, world_size]
+        variables = (global_input_buf, gate, weight, 
+                local_expert_count, global_expert_count, fwd_expert_count,
+                pos)
+        ctx.moe_args = (num_expert, inp.shape[0], fwd_batch_size, world_size)
         ctx.save_for_backward(*variables)
 
-        return output[0]
+        return output
 
     @staticmethod
     def backward(ctx, grad_out):
-        (input_buf, gate, weight, local_expert_count, global_expert_count, 
-                pos, num_expert, batch_size, world_size) = ctx.saved_tensors
+        (input_buf, gate, weight, 
+                local_expert_count, global_expert_count, fwd_expert_count, 
+                pos) = ctx.saved_tensors
+        num_expert, local_batch_size, fwd_batch_size, world_size = ctx.moe_args
 
         grad_out_buf, = moe_cuda.local_scatter(grad_out.contiguous(), pos)
         global_grad_out_buf, = moe_cuda.global_scatter(grad_out_buf,
                 local_expert_count, global_expert_count,
-                batch_size, world_size)
+                fwd_batch_size, world_size)
 
         grad_inp_buf, grad_weight = moe_cuda.backward(
-                global_grad_out_buf, input_buf, weight, expert_count)
+                global_grad_out_buf, input_buf, weight, fwd_expert_count)
 
-        local_grad_inp_buf = moe_cuda.global_gather(grad_inp_buf,
+        local_grad_inp_buf, = moe_cuda.global_gather(grad_inp_buf,
                 local_expert_count, global_expert_count,
-                batch_size, world_size)
+                local_batch_size, world_size)
         grad_inp, = moe_cuda.local_gather(local_grad_inp_buf, pos)
 
-        return grad_inp, None, grad_weight
+        return grad_inp, None, grad_weight, None
 
 
 def moe(inp, gate, weight, world_size):
     if world_size is not None:
-        return MOEGlobal.apply(inp, gate, weight)
+        return MOEGlobal.apply(inp, gate, weight, world_size)
     else:
         return MOELocal.apply(inp, gate, weight)

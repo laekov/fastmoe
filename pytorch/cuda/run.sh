@@ -8,7 +8,7 @@ export PYTHONPATH=$PWD/build/lib.linux-x86_64-3.7
 export LD_LIBRARY_PATH=/home/laekov/.local/lib/python3.7/site-packages/torch/lib:$LD_LIBRARY_PATH
 if [ -z $1 ]
 then
-	python3 moe_test.py
+	python3 moe_test.py 2>logs/$OMPI_COMM_WORLD_RANK.log
 elif [ .$1 = '.test_all' ]
 then
 	for nexp in 1 2 4 

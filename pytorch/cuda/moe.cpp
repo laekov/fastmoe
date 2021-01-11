@@ -67,6 +67,12 @@ std::vector<torch::Tensor> moe_backward(
 
 #ifdef MOE_USE_NCCL
 
+std::vector<torch::Tensor> moe_expert_exchange(
+		torch::Tensor local_expert_count,
+		size_t num_expert, size_t n_workers) {
+	return moe_cuda_expert_exchange(local_expert_count, num_expert, n_workers);
+}
+
 std::vector<torch::Tensor> moe_global_scatter(
 		torch::Tensor input_buf,
 		torch::Tensor local_expert_count,
@@ -107,6 +113,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("local_scatter", &moe_local_scatter, "MoE local scatter (CUDA)");
   m.def("local_gather", &moe_local_gather, "MoE local gather (CUDA)");
 #ifdef MOE_USE_NCCL
+  m.def("expert_exchange", &moe_expert_exchange, "MoE expert exchange (CUDA)");
   m.def("global_scatter", &moe_global_scatter, "MoE global scatter (CUDA)");
   m.def("global_gather", &moe_global_gather, "MoE global gather (CUDA)");
 #endif

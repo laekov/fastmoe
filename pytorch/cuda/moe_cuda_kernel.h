@@ -41,6 +41,10 @@ std::vector<torch::Tensor> moe_cuda_global_gather(
 	torch::Tensor global_expert_count,
 	long batch_size, long n_workers);
 
+std::vector<torch::Tensor> moe_cuda_expert_exchange(
+	torch::Tensor local_expert_count,
+	long num_expert, long n_workers);
+
 #endif 
 
 #endif  // MOE_CUDA_KERNEL_H
