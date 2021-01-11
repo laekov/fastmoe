@@ -27,14 +27,16 @@ class MOELayer(nn.Module):
 
 
 class MOELayer_raw(nn.Module):
-    def __init__(self, num_expert=32, in_feat=1024, out_feat=1024):
+    def __init__(self, num_expert=32, in_feat=1024, out_feat=1024, 
+            world_size=0):
         super(MOELayer_raw, self).__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.weight = nn.Parameter(
-            torch.Tensor(num_expert, out_feat, in_feat))
+            torch.Tensor(num_expert * world_size, out_feat, in_feat))
         self.reset_parameters()
+
 
     def reset_parameters(self):
         for i in range(self.num_expert):

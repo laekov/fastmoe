@@ -67,6 +67,7 @@ def test_module(moe, linear, inp, gate):
     moe.zero_grad()
     x = (linear(inp))
     output = moe(x, gate)
+    print('ooutput', torch.distributed.get_rank(), output)
     y = output.mean()
     y.backward()
     return output, moe.weight.grad, linear.weight.grad, linear.bias.grad
@@ -86,8 +87,14 @@ def test():
         moe = MOELayer(num_expert, in_feat, out_feat, world_size).cuda()
     else:
         moe = MOELayer(num_expert, in_feat, out_feat).cuda()
-    moe_raw = MOELayer_raw(num_expert, in_feat, out_feat).cuda()
-    moe_raw.weight.data = moe.weight.data.clone()
+    moe_raw = MOELayer_raw(num_expert, in_feat, out_feat, world_size).cuda()
+    if world_size == 1:
+        moe_raw.weight.data = moe.weight.data.clone()
+    else:
+        weight_array = [torch.empty_like(moe.weight.data).cpu() 
+                for _ in range(world_size)]
+        torch.distributed.all_gather(weight_array, moe.weight.data.cpu())
+        moe_raw.weight.data = torch.cat(weight_array, dim=0).cuda()
 
     inp = torch.rand(batch_size, in_feat).cuda()
     gate = torch.randint(low=0, 
@@ -97,11 +104,12 @@ def test():
     # gate = torch.Tensor([0, 1, 0, 1]).int().cuda()
 
     moe_out = test_module(moe, linear, inp.clone(), gate.clone())
-    print('hhh')
-    return
     raw_out = test_module(moe_raw, linear, inp.clone(), gate.clone())
 
-    names = ['Out', 'Moe wei', 'Linear wei', 'Linear bias']
+    if world_size == 1:
+        names = ['Out', 'Moe wei', 'Linear wei', 'Linear bias']
+    else:
+        names = ['Out']
     for name, mo, ro in zip(names, moe_out, raw_out):
         err = (mo - ro).abs().sum()
         print('{} abs err {}'.format(name, err))
@@ -134,8 +142,6 @@ def test_dp():
 if __name__ == '__main__':
     torch.distributed.init_process_group(backend='mpi')
     world_size = torch.distributed.get_world_size()
-    if world_size == 1:
-        world_size = None
     test()
     # print('{} / {}'.format(torch.distributed.get_rank(), torch.distributed.get_world_size()))
     # perf()

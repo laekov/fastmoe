@@ -155,6 +155,7 @@ void moe_cuda_global_scatter_impl(
 		NCCL_SAFE_CALL(ncclGroupEnd());
 	}
 	delete [] expert_ptr;
+	smgr->sync(1);
 }
 
 std::vector<torch::Tensor> moe_cuda_global_scatter(
@@ -224,6 +225,7 @@ void moe_cuda_global_gather_impl(
 		NCCL_SAFE_CALL(ncclGroupEnd());
 	}
 	delete [] expert_ptr;
+	smgr->sync(1);
 }
 
 std::vector<torch::Tensor> moe_cuda_global_gather(
@@ -238,7 +240,7 @@ std::vector<torch::Tensor> moe_cuda_global_gather(
 
     AT_DISPATCH_FLOATING_TYPES(output_buf.scalar_type(), 
 			"moe_cuda_global_gather", ([&] {
-		moe_cuda_global_scatter_impl<scalar_t>(
+		moe_cuda_global_gather_impl<scalar_t>(
 			output_buf.data_ptr<scalar_t>(),
 			local_expert_count.data_ptr<int>(),
 			global_expert_count.data_ptr<int>(),
