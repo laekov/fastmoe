@@ -5,24 +5,37 @@ import time
 import sys
 
 
-dev_name = 'cuda:1'
+dev_name_default = 'cuda:0'
 
 
 def perf():
     torch.manual_seed(42 + torch.distributed.get_rank())
     torch.cuda.manual_seed(42 + torch.distributed.get_rank())
     
-    batch_size = int(sys.argv[1])
-    in_feat = int(sys.argv[2])
-    out_feat = int(sys.argv[3])
-    num_expert = int(sys.argv[4])
+    if len(sys.argv) == 6:
+        batch_size = int(sys.argv[2])
+        in_feat = int(sys.argv[3])
+        out_feat = int(sys.argv[4])
+        num_expert = int(sys.argv[5])
+    else:
+        batch_size = 4096
+        in_feat = 1024
+        out_feat = 4096
+        num_expert = 4
+    if torch.distributed.get_rank() == 0:
+        print('Performance test case bs {} {}x{} ne {}'.format(batch_size,
+            in_feat, out_feat, num_expert))
+    if torch.distributed.get_world_size() > 1:
+        dev_name = 'cuda'
+    else:
+        dev_name = dev_name_default
 
     inp = torch.rand(batch_size, in_feat).cuda(dev_name)
     gate = torch.randint(low=0, 
             high=num_expert * torch.distributed.get_world_size(), 
             size=(batch_size, ), requires_grad=False).int().cuda(dev_name)
 
-    moe = MOELayer(num_expert, in_feat, out_feat).cuda(dev_name)
+    moe = MOELayer(num_expert, in_feat, out_feat, world_size).cuda(dev_name)
     moe.train()
 
     o = moe(inp, gate)
@@ -146,6 +159,14 @@ def test_dp():
 if __name__ == '__main__':
     torch.distributed.init_process_group(backend='mpi')
     world_size = torch.distributed.get_world_size()
-    test()
-    # print('{} / {}'.format(torch.distributed.get_rank(), torch.distributed.get_world_size()))
-    # perf()
+    if len(sys.argv) == 2:
+        task = sys.argv[1]
+        print('Specificed task {}'.format(task))
+        if task == 'correctness':
+            test()
+        elif task == 'dp':
+            test_dp()
+        elif task == 'performance':
+            perf()
+    else:
+        test()

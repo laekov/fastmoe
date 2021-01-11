@@ -84,7 +84,7 @@ class MOEGlobal(Function):
 
 
 def moe(inp, gate, weight, world_size):
-    if world_size is not None:
+    if world_size is not None and world_size > 1:
         return MOEGlobal.apply(inp, gate, weight, world_size)
     else:
         return MOELocal.apply(inp, gate, weight)
