@@ -1,6 +1,6 @@
 #ifndef CUBLAS_WRAPPER_H
 #define CUBLAS_WRAPPER_H
-#include <cublas_v2.h>                                                                                          
+#include <cublas_v2.h>
 
 inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
                                   cublasOperation_t transa,

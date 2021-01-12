@@ -11,13 +11,21 @@ setup(
             name='moe_cuda', 
             sources=[
                 'moe.cpp',
-                # 'cuda_stream_manager.cpp',
+                'cuda_stream_manager.cpp',
                 'moe_cuda_kernel.cu',
                 ],
-            extra_compile_args={'cxx': ['-I{}'.format(CUDA_HELPER)],
-                                'nvcc': ['-I{}'.format(CUDA_HELPER)]}
-        )
-    ],
+            extra_compile_args={
+                'cxx': [
+                    '-I{}'.format(CUDA_HELPER),
+                    '-DMOE_USE_NCCL'
+                    ],
+                'nvcc': [
+                    '-I{}'.format(CUDA_HELPER),
+                    '-DMOE_USE_NCCL'
+                    ]
+                }
+            )
+        ],
     cmdclass={
         'build_ext': BuildExtension
     })
