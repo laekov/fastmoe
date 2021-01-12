@@ -3,6 +3,11 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
 
 CUDA_HELPER = os.environ.get('CUDA_HELPER', '/usr/local/cuda/samples/common/inc')
+cxx_flags = [
+        '-I{}'.format(CUDA_HELPER)
+        ]
+if os.environ.get('USE_NCCL', '0') == '1':
+    cxx_flags.append('-DMOE_USE_NCCL')
 
 setup(
     name='moe_cuda',
@@ -15,14 +20,8 @@ setup(
                 'moe_cuda_kernel.cu',
                 ],
             extra_compile_args={
-                'cxx': [
-                    '-I{}'.format(CUDA_HELPER),
-                    '-DMOE_USE_NCCL'
-                    ],
-                'nvcc': [
-                    '-I{}'.format(CUDA_HELPER),
-                    '-DMOE_USE_NCCL'
-                    ]
+                'cxx': cxx_flags,
+                'nvcc': cxx_flags
                 }
             )
         ],
