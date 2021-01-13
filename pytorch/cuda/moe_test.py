@@ -159,7 +159,7 @@ def test_dp():
 if __name__ == '__main__':
     torch.distributed.init_process_group(backend='mpi')
     world_size = torch.distributed.get_world_size()
-    if len(sys.argv) == 2:
+    if len(sys.argv) >= 2:
         task = sys.argv[1]
         print('Specificed task {}'.format(task))
         if task == 'correctness':
