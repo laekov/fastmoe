@@ -2,7 +2,7 @@ import math
 from torch import nn
 import torch
 
-from moe_function import moe
+from .moe_function import moe
 
 
 class MOELayer(nn.Module):
