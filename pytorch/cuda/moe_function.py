@@ -40,16 +40,12 @@ class MOEGlobal(Function):
         fwd_batch_size = int(fwd_expert_count.sum().item())
 
         local_input_buf, = moe_cuda.local_scatter(inp, pos)
-        global_input_buf, = moe_cuda.global_scatter(local_input_buf, 
-                local_expert_count, global_expert_count,
-                fwd_batch_size, world_size)
 
-        global_output_buf, = moe_cuda.forward(global_input_buf, weight, 
-                fwd_expert_count)
-
-        local_output_buf, = moe_cuda.global_gather(global_output_buf,
+        local_output_buf, global_input_buf = moe_cuda.global_fused_forward(
+                local_input_buf, weight,
                 local_expert_count, global_expert_count,
-                inp.shape[0], world_size)
+                fwd_batch_size, inp.shape[0], world_size)
+
         output, = moe_cuda.local_gather(local_output_buf, pos)
 
         variables = (global_input_buf, gate, weight, 
