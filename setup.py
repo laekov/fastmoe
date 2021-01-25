@@ -1,4 +1,4 @@
-from setuptools import setup
+import setuptools
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
 
@@ -8,25 +8,28 @@ cxx_flags = [
         ]
 if os.environ.get('USE_NCCL', '0') == '1':
     cxx_flags.append('-DMOE_USE_NCCL')
+    os.environ['CXX'] = 'mpicxx'
 
-setup(
-    name='moe_cuda',
-    ext_modules=[
-        CUDAExtension(
-            name='moe_cuda', 
-            sources=[
-                'cuda/moe.cpp',
-                'cuda/cuda_stream_manager.cpp',
-                'cuda/moe_compute_kernel.cu',
-                'cuda/moe_comm_kernel.cu',
-                'cuda/moe_fused_kernel.cu',
-                ],
-            extra_compile_args={
-                'cxx': cxx_flags,
-                'nvcc': cxx_flags
-                }
-            )
-        ],
-    cmdclass={
-        'build_ext': BuildExtension
-    })
+if __name__ == '__main__':
+    setuptools.setup(
+        name='fmoe_cuda',
+        packages=setuptools.find_packages(),
+        ext_modules=[
+            CUDAExtension(
+                name='fmoe_cuda', 
+                sources=[
+                    'cuda/moe.cpp',
+                    'cuda/cuda_stream_manager.cpp',
+                    'cuda/moe_compute_kernel.cu',
+                    'cuda/moe_comm_kernel.cu',
+                    'cuda/moe_fused_kernel.cu',
+                    ],
+                extra_compile_args={
+                    'cxx': cxx_flags,
+                    'nvcc': cxx_flags
+                    }
+                )
+            ],
+        cmdclass={
+            'build_ext': BuildExtension
+        })
