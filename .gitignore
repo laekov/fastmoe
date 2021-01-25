@@ -7,3 +7,6 @@ exp/
 a.out
 *.egg-info
 *.egg
+build
+*swp
+logs

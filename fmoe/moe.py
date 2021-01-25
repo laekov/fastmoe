@@ -8,7 +8,7 @@ from .moe_function import moe
 class FMoE(nn.Module):
     def __init__(self, num_expert=32, in_feat=1024, out_feat=1024,
             world_size=None):
-        super(MOELayer, self).__init__()
+        super(FMoE, self).__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
@@ -29,7 +29,7 @@ class FMoE(nn.Module):
 class BruteForceMoE(nn.Module):
     def __init__(self, num_expert=32, in_feat=1024, out_feat=1024, 
             world_size=0):
-        super(MOELayer_raw, self).__init__()
+        super(BruteForceMoE, self).__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat

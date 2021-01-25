@@ -1,4 +1,5 @@
-from moe import MOELayer, MOELayer_raw
+from fmoe import FMoE as MOELayer 
+from fmoe import BruteForceMoE as MOELayer_raw
 import torch
 from torch import nn
 import time
