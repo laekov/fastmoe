@@ -26,6 +26,23 @@ class FMoE(nn.Module):
         return moe(inp, gate.int(), self.weight, self.world_size)
 
 
+class FFFN(nn.Module):
+    def __init__(self, num_expert=32, in_feat=1024, hidden_feat=4096, 
+            out_feat=1024, world_size=None, activation=torch.nn.functional.gelu):
+        super(FFFN, self).__init__()
+        self.htoh4 = FMoE(num_expert, in_feat, hidden_feat,
+                world_size=world_size)
+        self.activation = activation
+        self.h4toh = FMoE(num_expert, hidden_feat, out_feat, 
+                world_size=world_size)
+
+    def forward(self, inp, gate):
+        x = self.htoh4(inp)
+        x = self.activation(x)
+        x = self.h4toh(x)
+        return x
+
+
 class BruteForceMoE(nn.Module):
     def __init__(self, num_expert=32, in_feat=1024, out_feat=1024, 
             world_size=0):

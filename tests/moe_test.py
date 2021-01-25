@@ -159,6 +159,7 @@ def test_dp():
 
 if __name__ == '__main__':
     torch.distributed.init_process_group(backend='mpi')
+    rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
     if len(sys.argv) >= 2:
         task = sys.argv[1]

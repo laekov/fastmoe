@@ -12,8 +12,8 @@ if os.environ.get('USE_NCCL', '0') == '1':
 
 if __name__ == '__main__':
     setuptools.setup(
-        name='fmoe_cuda',
-        packages=setuptools.find_packages(),
+        name='fmoe',
+        packages=['fmoe'],
         ext_modules=[
             CUDAExtension(
                 name='fmoe_cuda', 
@@ -30,6 +30,7 @@ if __name__ == '__main__':
                     }
                 )
             ],
+        version='0.0.1',
         cmdclass={
             'build_ext': BuildExtension
         })
