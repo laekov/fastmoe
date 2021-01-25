@@ -17,7 +17,9 @@ setup(
             sources=[
                 'cuda/moe.cpp',
                 'cuda/cuda_stream_manager.cpp',
-                'cuda/moe_cuda_kernel.cu',
+                'cuda/moe_compute_kernel.cu',
+                'cuda/moe_comm_kernel.cu',
+                'cuda/moe_fused_kernel.cu',
                 ],
             extra_compile_args={
                 'cxx': cxx_flags,

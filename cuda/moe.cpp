@@ -95,6 +95,20 @@ std::vector<torch::Tensor> moe_global_gather(
 			batch_size, n_workers);
 }
 
+
+std::vector<torch::Tensor> moe_global_fused_forward(
+		torch::Tensor input_buf,
+        torch::Tensor weight,
+		torch::Tensor local_expert_count,
+		torch::Tensor global_expert_count,
+		long global_batch_size, long local_batch_size, long n_workers) {
+	CHECK_INPUT(input_buf);
+	CHECK_INPUT(weight);
+	return moe_cuda_global_fused_forward(
+			input_buf, weight, local_expert_count, global_expert_count,
+			global_batch_size, local_batch_size, n_workers);
+}
+
 #endif
 
 /*
@@ -116,6 +130,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("expert_exchange", &moe_expert_exchange, "MoE expert exchange (CUDA)");
   m.def("global_scatter", &moe_global_scatter, "MoE global scatter (CUDA)");
   m.def("global_gather", &moe_global_gather, "MoE global gather (CUDA)");
+  m.def("global_fused_forward", &moe_global_fused_forward, 
+		  "MoE global gather (CUDA)");
 #endif
   m.def("forward", &moe_forward, "MoE forward (CUDA)");
   m.def("backward", &moe_backward, "MoE backward (CUDA)");
