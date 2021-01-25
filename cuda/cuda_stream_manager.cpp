@@ -6,7 +6,7 @@
 #include "cuda_stream_manager.h"
 #include <helper_cuda.h> 
 
-#define SMGR_N_STREAMS 4
+#define SMGR_N_STREAMS 16
 
 cudaStream_t CudaStreamManager::stream(size_t idx) {
 	return this->streams[idx % SMGR_N_STREAMS];

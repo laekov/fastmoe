@@ -1,8 +1,9 @@
 #!/bin/bash
+export PYTHONPATH=$PWD/cuda/build/lib.linux-x86_64-3.7
 
 if [[ $1 == 'train' ]]; then
     echo 'Run training...'
-    python train.py \
+    python3 train.py \
         --cuda \
         --data ../data/wikitext-103/ \
         --dataset wt103 \
