@@ -44,6 +44,16 @@ the data parallel parameter synchronization list.
 
 ## Feature Roadmap
 
+### Support NCCL backend
+
+Currently, fmoe depends on MPI to exchange the count of experts before using
+NCCL p2p communication function to exchange features. As an NCCL communicator
+can be established throught MPI, while MPI has to be initiated, The PyTorch
+distributed module has to be initialzied by MPI backend. However, this limits
+the capibility to use half tensors and conduct other computation. Therefore, a
+solution will be appreciated if we can ue PyTorch's NCCL backend while passing
+our mendatary information efficiently.
+
 ### Better All-to-all communication efficiency and computation performance
 
 The dispatching process from source worker to the expert is time-consuming and
