@@ -63,4 +63,6 @@ To enable larger expert sizes.
 
 ### Use zero-optimizer to reduce memory consumption
 
+### Intigrate top-k gate into local scatter gather
+
 
