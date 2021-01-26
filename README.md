@@ -41,3 +41,26 @@ NCCL and MPI backend are required to be built with PyTorch. Use environment
 variable `USE_NCCL=1` to `setup.py` to enable distributing experts across
 workers. Note that the arguments of the MoE layers should then be excluded from
 the data parallel parameter synchronization list.
+
+## Feature Roadmap
+
+### Better All-to-all communication efficiency and computation performance
+
+The dispatching process from source worker to the expert is time-consuming and
+topology-aware, as it is an all-to-all communication. Overlapping or other
+communication reducition technologies can be applied to reduce the overhead of
+this step. However, this demands much research and coding efforts.
+
+### Dynamic expert distribution load balancing
+
+Load imbalance is observed as there is no loss item about load balancing. Some
+experts are significantly more frequently called. Therefore, a dynamic scheduler
+to duplicate or recycle some experts on some workers may be effective.
+
+### Model parallel the experts
+
+To enable larger expert sizes. 
+
+### Use zero-optimizer to reduce memory consumption
+
+
