@@ -43,7 +43,7 @@ class FFFN(nn.Module):
                 world_size=world_size)
         self.h4toh = FMoE(num_expert, d_hidden, d_model, 
                 world_size=world_size)
-        self.gate = nn.Linear(d_model, num_expert)
+        self.gate = nn.Linear(d_model, num_expert * world_size)
         self.layer_norm = nn.LayerNorm(d_model)
         self.bias = torch.nn.parameter.Parameter(torch.zeros(d_model,
                 dtype=torch.float32)) 
