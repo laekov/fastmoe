@@ -135,9 +135,9 @@ def test():
         print('Rank {} {} abs err {}'.format(rank, name, err))
         if err > 1e-3:
             sys.stderr.write('=========== moe out ==============\n')
-            sys.stderr.write('{}'.format(mo)) 
+            sys.stderr.write('{}\n'.format(mo)) 
             sys.stderr.write('=========== raw out ==============\n')
-            sys.stderr.write('{}'.format(ro)) 
+            sys.stderr.write('{}\n'.format(ro)) 
             return
 
 
