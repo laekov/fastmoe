@@ -233,7 +233,7 @@ std::vector<torch::Tensor> moe_cuda_local_scatter(
 
 	auto input_buf = torch::empty_like(input);
 
-    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "moe_local_scatter_cuda", 
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "moe_local_scatter_cuda", 
 			([&] {
 		moe_cuda_local_scatter_impl<scalar_t>(
 			input.data_ptr<scalar_t>(),
@@ -255,7 +255,7 @@ std::vector<torch::Tensor> moe_cuda_local_gather(
 
 	auto output = torch::empty_like(output_buf);
 
-    AT_DISPATCH_FLOATING_TYPES(output_buf.scalar_type(), "moe_local_gather_cuda", 
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(output_buf.scalar_type(), "moe_local_gather_cuda", 
 			([&] {
 		moe_cuda_local_gather_impl<scalar_t>(
 			output_buf.data_ptr<scalar_t>(),
@@ -288,7 +288,7 @@ std::vector<torch::Tensor> moe_cuda_forward(
 		.dtype(input_buf.dtype());
     auto output = torch::empty({batch_size, out_feat}, out_options);
     
-    AT_DISPATCH_FLOATING_TYPES(input_buf.scalar_type(), "moe_forward_cuda", 
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), "moe_forward_cuda", 
 			([&] {
 		moe_cuda_forward_impl<scalar_t>(
 			input_buf.data_ptr<scalar_t>(),
@@ -326,7 +326,7 @@ std::vector<torch::Tensor> moe_cuda_backward(
     auto grad_input_buf = grad_output_buf.new_empty({batch_size, in_feat}); 
     auto grad_weight = grad_output_buf.new_empty({num_expert, out_feat, in_feat});
 
-    AT_DISPATCH_FLOATING_TYPES(input_buf.scalar_type(), "moe_cuda_backward", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), "moe_cuda_backward", ([&] {
         moe_cuda_backward_impl<scalar_t>(
             grad_output_buf.data_ptr<scalar_t>(),
             input_buf.data_ptr<scalar_t>(),

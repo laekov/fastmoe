@@ -112,7 +112,7 @@ std::vector<torch::Tensor> moe_cuda_global_scatter(
     auto global_input_buf = input_buf.new_empty({batch_size, in_feat});
 	auto smgr = getCudaStreamManager(input_buf.device().index());
 
-    AT_DISPATCH_FLOATING_TYPES(input_buf.scalar_type(), 
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), 
 			"moe_cuda_global_scatter", ([&] {
 		moe_cuda_global_scatter_impl<scalar_t>(
 			input_buf.data_ptr<scalar_t>(),
@@ -182,7 +182,7 @@ std::vector<torch::Tensor> moe_cuda_global_gather(
     auto local_output_buf = output_buf.new_empty({batch_size, out_feat});
 	auto smgr = getCudaStreamManager(output_buf.device().index());
 
-    AT_DISPATCH_FLOATING_TYPES(output_buf.scalar_type(), 
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(output_buf.scalar_type(), 
 			"moe_cuda_global_gather", ([&] {
 		moe_cuda_global_gather_impl<scalar_t>(
 			output_buf.data_ptr<scalar_t>(),

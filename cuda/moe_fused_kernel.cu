@@ -127,7 +127,7 @@ std::vector<torch::Tensor> moe_cuda_global_fused_forward(
     auto global_input_buf = input_buf.new_empty({global_batch_size, in_feat});
     auto global_output_buf = input_buf.new_empty({global_batch_size, out_feat});
     auto output_buf = input_buf.new_empty({local_batch_size, out_feat});
-	AT_DISPATCH_FLOATING_TYPES(input_buf.scalar_type(), 
+	AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), 
 			"moe_cuda_global_fused_forward", ([&] {
 		moe_cuda_global_fused_forward_impl(
 			input_buf.data_ptr<scalar_t>(),
