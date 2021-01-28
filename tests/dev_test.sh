@@ -2,6 +2,8 @@
 if [ ! -z $OMPI_COMM_WORLD_LOCAL_RANK ]
 then
 	export CUDA_VISIBLE_DEVICES=$OMPI_COMM_WORLD_LOCAL_RANK
+	export MASTER_ADDR=localhost
+	export MASTER_PORT=36666
 fi
 
 if [ -z $OMPI_COMM_WORLD_RANK ]

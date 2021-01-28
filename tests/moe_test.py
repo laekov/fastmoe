@@ -4,6 +4,7 @@ import torch
 from torch import nn
 import time
 import sys
+import os
 
 
 dev_name_default = 'cuda:0'
@@ -105,10 +106,10 @@ def test():
     if world_size == 1:
         moe_raw.weight.data = moe.weight.data.clone()
     else:
-        weight_array = [torch.empty_like(moe.weight.data).cpu() 
+        weight_array = [torch.empty_like(moe.weight.data)
                 for _ in range(world_size)]
-        torch.distributed.all_gather(weight_array, moe.weight.data.cpu())
-        moe_raw.weight.data = torch.cat(weight_array, dim=0).cuda()
+        torch.distributed.all_gather(weight_array, moe.weight.data)
+        moe_raw.weight.data = torch.cat(weight_array, dim=0)
 
     inp = torch.rand(batch_size, in_feat).cuda()
     gate = torch.randint(low=0, 
@@ -124,13 +125,20 @@ def test():
     if world_size > 1:
         rank = torch.distributed.get_rank()
         ou, wg, lwg, lbg = raw_out
-        wg = wg.cpu()
         torch.distributed.all_reduce(wg)
         wg = wg[rank * num_expert:(rank + 1)* num_expert]
-        raw_out = ou, wg.cuda(), lwg, lbg
+        raw_out = ou, wg, lwg, lbg
+    else:
+        rank = 0
     for name, mo, ro in zip(names, moe_out, raw_out):
         err = (mo - ro).abs().sum()
-        print('{} abs err {}'.format(name, err))
+        print('Rank {} {} abs err {}'.format(rank, name, err))
+        if err > 1e-3:
+            sys.stderr.write('=========== moe out ==============\n')
+            sys.stderr.write('{}'.format(mo)) 
+            sys.stderr.write('=========== raw out ==============\n')
+            sys.stderr.write('{}'.format(ro)) 
+            return
 
 
 def test_dp():
@@ -158,7 +166,9 @@ def test_dp():
 
 
 if __name__ == '__main__':
-    torch.distributed.init_process_group(backend='mpi')
+    os.environ['RANK'] = os.environ.get('OMPI_COMM_WORLD_RANK', 0)
+    os.environ['WORLD_SIZE'] = os.environ.get('OMPI_COMM_WORLD_SIZE', 1)
+    torch.distributed.init_process_group(backend='nccl')
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
     if len(sys.argv) >= 2:

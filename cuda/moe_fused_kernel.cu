@@ -14,7 +14,6 @@
 #include "cublas_wrapper.h"
 
 #ifdef MOE_USE_NCCL
-#include <mpi.h>
 #include <nccl.h>
 
 template<typename scalar_t>
@@ -24,8 +23,8 @@ void moe_cuda_global_fused_forward_impl(
 		scalar_t* global_input_buf,
 		scalar_t* global_output_buf,
 		scalar_t* output_buf,
-		const int* local_expert_count, 
-		const int* global_expert_count, 
+		const long* local_expert_count, 
+		const long* global_expert_count, 
 		long in_feat, long out_feat, 
 		long num_expert, long world_size,
 		CudaStreamManager* smgr) {
@@ -136,8 +135,8 @@ std::vector<torch::Tensor> moe_cuda_global_fused_forward(
 			global_input_buf.data_ptr<scalar_t>(),
 			global_output_buf.data_ptr<scalar_t>(),
 			output_buf.data_ptr<scalar_t>(),
-			local_expert_count.data_ptr<int>(),
-			global_expert_count.data_ptr<int>(),
+			local_expert_count.data_ptr<long>(),
+			global_expert_count.data_ptr<long>(),
 			in_feat, out_feat, num_expert, n_workers,
 			smgr);
 	}));

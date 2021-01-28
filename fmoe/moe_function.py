@@ -38,16 +38,30 @@ class MOELocal(Function):
 class MOEGlobal(Function):
     @staticmethod
     def forward(ctx, inp, gate, weight, world_size):
+        fmoe_cuda.ensure_nccl(
+            torch.distributed.distributed_c10d._default_pg, inp)
         num_expert = weight.shape[0]
 
-        local_expert_count, pos = fmoe_cuda.expert_count(gate, 
-                world_size * num_expert)
-        global_expert_count, fwd_expert_count = fmoe_cuda.expert_exchange(
+        # local_expert_count, pos = fmoe_cuda.expert_count(gate, 
+                # world_size * num_expert)
+        _, pos = torch.sort(gate)
+        gate_idx, gate_count = torch.unique(gate, return_counts=True)
+        local_expert_count = torch.zeros(weight.shape[0] * world_size, 
+                device=weight.device, dtype=torch.long)
+        local_expert_count.index_put_((gate_idx.long(), ), gate_count)
+
+        global_expert_count, = fmoe_cuda.expert_exchange(
                 local_expert_count, num_expert, world_size)
+        print('Local {} Global {}'.format(local_expert_count, global_expert_count))
+        fwd_expert_count = global_expert_count.view(num_expert, 
+                world_size).sum(dim=1).cpu()
+
         fwd_batch_size = int(fwd_expert_count.sum().item())
 
         local_input_buf, = fmoe_cuda.local_scatter(inp, pos)
 
+        local_expert_count = local_expert_count.cpu()
+        global_expert_count = global_expert_count.cpu()
         local_output_buf, global_input_buf = fmoe_cuda.global_fused_forward(
                 local_input_buf, weight,
                 local_expert_count, global_expert_count,

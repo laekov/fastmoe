@@ -8,7 +8,6 @@ cxx_flags = [
         ]
 if os.environ.get('USE_NCCL', '0') == '1':
     cxx_flags.append('-DMOE_USE_NCCL')
-    os.environ['CXX'] = 'mpicxx'
 
 if __name__ == '__main__':
     setuptools.setup(

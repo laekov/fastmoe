@@ -13,50 +13,60 @@
 #include "cuda_stream_manager.h"
 
 #ifdef MOE_USE_NCCL
-#include <mpi.h>
 #include <nccl.h>
 
 void moe_cuda_expert_exchange_impl(
-		const int* local_expert_count, 
-		int* global_expert_count, 
-		int* fwd_expert_count, 
-		int num_expert, int world_size) {
-	MPI_Alltoall(local_expert_count, num_expert, MPI_INT, 
-			global_expert_count, num_expert, MPI_INT, MPI_COMM_WORLD);
-	for (int i = 0; i < num_expert; ++i) {
-		for (int j = 0; j < world_size; ++j) {
-			fwd_expert_count[i] += global_expert_count[i + j * num_expert];
-		}
+		const long* local_expert_count, 
+		long* global_expert_count, 
+		int num_expert, int world_size,
+		CudaStreamManager* smgr) {
+	NCCL_SAFE_CALL(ncclGroupStart());
+	for (int i = 0; i < world_size; ++i) {
+		NCCL_SAFE_CALL(ncclSend(
+				local_expert_count + num_expert * i,
+				num_expert,
+				ncclInt64,
+				i,
+				smgr->ncclcomm,
+				smgr->stream(0)));
+		NCCL_SAFE_CALL(ncclRecv(
+				global_expert_count + num_expert * i,
+				num_expert,
+				ncclInt64,
+				i,
+				smgr->ncclcomm,
+				smgr->stream(0)));
 	}
+	NCCL_SAFE_CALL(ncclGroupEnd());
+	smgr->sync(1);
 }
 
 std::vector<torch::Tensor> moe_cuda_expert_exchange(
 		torch::Tensor local_expert_count,
 		long num_expert, long n_workers) {
     auto global_expert_count = torch::empty_like(local_expert_count);
-	auto fwe_options = torch::TensorOptions()
-		.dtype(local_expert_count.dtype());
-    auto fwd_expert_count = torch::zeros({num_expert}, fwe_options);
+	auto smgr = getCudaStreamManager(local_expert_count.device().index());
+
 	moe_cuda_expert_exchange_impl(
-			local_expert_count.data_ptr<int>(),
-			global_expert_count.data_ptr<int>(),
-			fwd_expert_count.data_ptr<int>(),
-			num_expert, n_workers);
-	return {global_expert_count, fwd_expert_count};
+			local_expert_count.data_ptr<long>(),
+			global_expert_count.data_ptr<long>(),
+			num_expert, n_workers,
+			smgr);
+	return {global_expert_count};
 }
 
 template<typename scalar_t>
 void moe_cuda_global_scatter_impl(
 	const scalar_t* local_input_buf,
-	const int* local_expert_count,
-	const int* global_expert_count,
+	const long* local_expert_count,
+	const long* global_expert_count,
 	scalar_t* input_buf,
 	size_t in_feat, size_t num_expert, size_t world_size,
 	CudaStreamManager* smgr) {
 	// assert world_size > 1
 	int recv_ptr = 0;
 	/* TODO: may save for backward */
-	int *expert_ptr = new int[num_expert * world_size];
+	long*expert_ptr = new long[num_expert * world_size];
 	expert_ptr[0] = 0;
 	for (int i = 1; i < num_expert * world_size; ++i) {
 		expert_ptr[i] = expert_ptr[i - 1] + local_expert_count[i - 1];
@@ -106,8 +116,8 @@ std::vector<torch::Tensor> moe_cuda_global_scatter(
 			"moe_cuda_global_scatter", ([&] {
 		moe_cuda_global_scatter_impl<scalar_t>(
 			input_buf.data_ptr<scalar_t>(),
-			local_expert_count.data_ptr<int>(),
-			global_expert_count.data_ptr<int>(),
+			local_expert_count.data_ptr<long>(),
+			global_expert_count.data_ptr<long>(),
 			global_input_buf.data_ptr<scalar_t>(),
 			in_feat, num_expert, n_workers,
 			smgr
@@ -119,14 +129,14 @@ std::vector<torch::Tensor> moe_cuda_global_scatter(
 template<typename scalar_t>
 void moe_cuda_global_gather_impl(
 	const scalar_t* output_buf,
-	const int* local_expert_count,
-	const int* global_expert_count,
+	const long* local_expert_count,
+	const long* global_expert_count,
 	scalar_t* local_output_buf,
 	size_t out_feat, size_t num_expert, size_t world_size,
 	CudaStreamManager* smgr) {
-	int send_ptr = 0;
+	long send_ptr = 0;
 	/* TODO: may save for backward */
-	int *expert_ptr = new int[num_expert * world_size];
+	long *expert_ptr = new long[num_expert * world_size];
 	expert_ptr[0] = 0;
 	for (int i = 1; i < num_expert * world_size; ++i) {
 		expert_ptr[i] = expert_ptr[i - 1] + local_expert_count[i - 1];
@@ -176,14 +186,19 @@ std::vector<torch::Tensor> moe_cuda_global_gather(
 			"moe_cuda_global_gather", ([&] {
 		moe_cuda_global_gather_impl<scalar_t>(
 			output_buf.data_ptr<scalar_t>(),
-			local_expert_count.data_ptr<int>(),
-			global_expert_count.data_ptr<int>(),
+			local_expert_count.data_ptr<long>(),
+			global_expert_count.data_ptr<long>(),
 			local_output_buf.data_ptr<scalar_t>(),
 			out_feat, num_expert, n_workers,
 			smgr
 		);
 	}));
 	return {local_output_buf,};
+}
+
+void moe_ensure_nccl(c10d::ProcessGroupNCCL& p, torch::Tensor t) {
+	auto smgr = getCudaStreamManager(0);
+	smgr->ensure((void*)&p, t.device());
 }
 
 #endif
