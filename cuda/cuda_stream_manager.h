@@ -5,7 +5,6 @@
 #include <cublas_v2.h>
 
 #ifdef MOE_USE_NCCL
-#include <mpi.h>
 #include <nccl.h>
 
 #define NCCL_SAFE_CALL(__fn__) { \
@@ -24,12 +23,13 @@ public:
     cublasHandle_t* handles;
     cudaStream_t* streams;
 #ifdef MOE_USE_NCCL
-	int rank, size;
+	char ncclgood;
 	ncclComm_t ncclcomm;
+	void ensure(void*, class at::Device);
 #endif
 
 public:
-    CudaStreamManager(int device_): device(device_) {
+    CudaStreamManager(int device_): device(device_), ncclgood(0) {
 		this->setup(device);
     }
 
