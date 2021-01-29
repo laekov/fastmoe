@@ -49,7 +49,7 @@ def _fmoe_full_forward(inp, gate, linears, activation, num_expert, world_size):
     for i, l in enumerate(linears):
         if i:
             x = activation(x)
-        x = l(x)
+        x = l(x, fwd_expert_count)
     x = MOEGather.apply(x, pos, local_expert_count, global_expert_count,
             inp.shape[0], world_size)
     return x
@@ -78,16 +78,15 @@ class FMoETransformerMLP(nn.Module):
                 dtype=torch.float32)) 
 
     def forward(self, inp):
-        # import pdb; pdb.set_trace()
         residual = inp
         if self.pre_lnorm:
             inp = self.layer_norm(inp)
 
-        inp = inp.view(-1, self.d_model).repeat_interleave(repeats=self.top_k, 
-                dim=0) # (BxLxtop_k) x d_model
-
         gate_top_k_idx, gate_score = self.gate(inp)
 
+        # TODO: merge replication into local_scatter
+        inp = inp.view(-1, self.d_model).repeat_interleave(repeats=self.top_k, 
+                dim=0) # (BxLxtop_k) x d_model
         x = _fmoe_full_forward(inp, gate_top_k_idx, 
                 [self.htoh4, self.h4toh], self.activation,
                 self.num_expert, self.world_size)
