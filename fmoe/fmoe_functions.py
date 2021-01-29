@@ -47,7 +47,7 @@ class MOEScatter(Function):
         (fwd_batch_size, local_batch_size, world_size) = ctx.moe_args
 
         if world_size > 1:
-            local_grad_in, = fmoe_cuda.global_gather(global_grad_out,
+            local_grad_in, = fmoe_cuda.global_gather(global_grad_in,
                     local_expert_count, global_expert_count,
                     local_batch_size, world_size)
         else:
