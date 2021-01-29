@@ -1,2 +1,2 @@
 from .moe import BruteForceMoE
-from .fmoe import FMoELinear, FMoENaiveGate, FMoETransformerMLP
+from .layers import FMoELinear, FMoENaiveGate, FMoETransformerMLP

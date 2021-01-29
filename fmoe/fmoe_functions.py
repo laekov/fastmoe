@@ -9,8 +9,8 @@ def moe_prepare_forward(gate, num_expert, world_size):
     with torch.no_grad():
         _, pos = torch.sort(gate)
         gate_idx, gate_count = torch.unique(gate, return_counts=True)
-        local_expert_count = torch.zeros(weight.shape[0] * world_size, 
-                device=weight.device, dtype=torch.long)
+        local_expert_count = torch.zeros(num_expert * world_size, 
+                device=gate.device, dtype=torch.long)
         local_expert_count.index_put_((gate_idx.long(), ), gate_count)
 
         global_expert_count, = fmoe_cuda.expert_exchange(
@@ -28,7 +28,7 @@ class MOEScatter(Function):
             fwd_batch_size, world_size):
         local_input_buf, = fmoe_cuda.local_gather(inp, pos)
         if world_size > 1:
-            global_input_buf, = moe_cuda.global_scatter(local_input_buf, 
+            global_input_buf, = fmoe_cuda.global_scatter(local_input_buf, 
                     local_expert_count, global_expert_count,
                     fwd_batch_size, world_size)
         else:
@@ -43,19 +43,19 @@ class MOEScatter(Function):
         (fwd_batch_size, local_batch_size, world_size) = ctx.moe_args
 
         if world_size > 1:
-            local_grad_in, = moe_cuda.global_gather(global_grad_out,
+            local_grad_in, = fmoe_cuda.global_gather(global_grad_out,
                     local_expert_count, global_expert_count,
                     local_batch_size, world_size)
         else:
             local_grad_in = global_grad_in
-        grad_in, = moe_cuda.local_scatter(local_grad_in, pos)
+        grad_in, = fmoe_cuda.local_scatter(local_grad_in, pos)
         return grad_in, None, None, None, None, None
 
 
 class MOELinear(Function):
     @staticmethod
     def forward(ctx, global_input_buf, weight, fwd_expert_count):
-        global_output_buf, = moe_cuda.forward(global_input_buf, weight,
+        global_output_buf, = fmoe_cuda.forward(global_input_buf, weight,
                 fwd_expert_count)
         variables = (input_buf, weight, fwd_expert_count)
         ctx.save_for_backward(*variables)
@@ -74,12 +74,12 @@ class MOEGather(Function):
     def forward(ctx, global_output_buf, pos, local_expert_count, 
             global_expert_count, local_batch_size, world_size):
         if world_size > 1:
-            local_output_buf, = moe_cuda.global_gather(global_output_buf, 
+            local_output_buf, = fmoe_cuda.global_gather(global_output_buf, 
                     local_expert_count, global_expert_count, 
                     local_batch_size, world_size)
         else:
             local_output_buf = global_output_buf
-        output, = moe_cuda.local_scatter(local_output_buf, pos)
+        output, = fmoe_cuda.local_scatter(local_output_buf, pos)
 
         ctx.moe_args = fwd_batch_size, world_size
         variables = (pos, local_expert_count, global_expert_count)
@@ -90,9 +90,9 @@ class MOEGather(Function):
     def backward(ctx, grad_out):
         pos, local_expert_count, global_expert_count = ctx.saved_tensors
         fwd_batch_size, world_size = ctx.moe_args
-        grad_out_buf = moe_cuda.local_gather(grad_out.contiguous(), pos)
+        grad_out_buf = fmoe_cuda.local_gather(grad_out.contiguous(), pos)
         if world_size > 1:
-            global_grad_out_buf, = moe_cuda.global_scatter(grad_out_buf,
+            global_grad_out_buf, = fmoe_cuda.global_scatter(grad_out_buf,
                     local_expert_count, global_expert_count,
                     fwd_batch_size, world_size)
         else:

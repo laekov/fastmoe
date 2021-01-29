@@ -1,10 +1,11 @@
 from .fmoe_functions import *
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class FMoELinear(nn.Module):
     def __init__(self, num_expert=32, in_feat=1024, out_feat=1024):
-        super(FMoE, self).__init__()
+        super(FMoELinear, self).__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
@@ -21,10 +22,11 @@ class FMoELinear(nn.Module):
         return MOELinear.apply(inp, self.weight, fwd_expert_count)
 
 
-class FMoENaiveGate(nn.module):
-    def __init__(self, num_expert=32, world_size=1, top_k=2):
+class FMoENaiveGate(nn.Module):
+    def __init__(self, d_model, num_expert, world_size, top_k=2):
         super(FMoENaiveGate, self).__init__()
         self.gate = nn.Linear(d_model, num_expert * world_size)
+        self.top_k = top_k
 
     def forward(self, inp):
         gate = self.gate(inp)
@@ -53,7 +55,7 @@ def _fmoe_full_forward(inp, gate, linears, activation, num_expert, world_size):
     return x
 
 
-class FMoETransformerMLP(nn.module):
+class FMoETransformerMLP(nn.Module):
     def __init__(self, num_expert=32, d_model=1024, d_hidden=4096, 
             world_size=None, activation=torch.nn.functional.gelu,
             top_k=2, pre_lnorm=False):
@@ -64,11 +66,12 @@ class FMoETransformerMLP(nn.module):
         self.world_size = world_size
         self.activation = activation
         self.pre_lnorm = pre_lnorm
+        self.top_k = top_k
 
         self.htoh4 = FMoELinear(num_expert, d_model, d_hidden)
         self.h4toh = FMoELinear(num_expert, d_hidden, d_model) 
 
-        self.gate = FMoENaivegate(num_expert, world_size, top_k)
+        self.gate = FMoENaiveGate(d_model, num_expert, world_size, top_k)
 
         self.layer_norm = nn.LayerNorm(d_model)
         self.bias = torch.nn.parameter.Parameter(torch.zeros(d_model,
