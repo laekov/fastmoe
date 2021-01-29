@@ -14,10 +14,7 @@ PyTorch with CUDA is required. The repository is currently tested with PyTorch
 v1.6.0 and CUDA 10, with designed compatibility to other versions.
 
 If distributed version is enabled, NCCL with P2P communication support,
-typically versions >= 2.7.5 is needed. Note that the MPI backend is used as
-there are some necessary messages to be passed by MPI in FMoE, the backend
-should be `mpi`. However, as there are other data to be synchronized by
-`torch.distributed`, cuda-aware mpi is required.
+typically versions >= 2.7.5 is needed. 
 
 ### Installing
 
@@ -37,22 +34,12 @@ feed forward layer by the `FMoE` layer.
 For data parallel, nothing else is needed.
 
 For expert parallel, in which experts are located separately across workers,
-NCCL and MPI backend are required to be built with PyTorch. Use environment
-variable `USE_NCCL=1` to `setup.py` to enable distributing experts across
-workers. Note that the arguments of the MoE layers should then be excluded from
-the data parallel parameter synchronization list.
+NCCL backend is required to be built with PyTorch. Use environment variable
+`USE_NCCL=1` to `setup.py` to enable distributing experts across workers. Note
+that the arguments of the MoE layers should then be excluded from the data
+parallel parameter synchronization list.
 
 ## Feature Roadmap
-
-### Support NCCL backend
-
-Currently, fmoe depends on MPI to exchange the count of experts before using
-NCCL p2p communication function to exchange features. As an NCCL communicator
-can be established throught MPI, while MPI has to be initiated, The PyTorch
-distributed module has to be initialzied by MPI backend. However, this limits
-the capibility to use half tensors and conduct other computation. Therefore, a
-solution will be appreciated if we can ue PyTorch's NCCL backend while passing
-our mendatary information efficiently.
 
 ### Better All-to-all communication efficiency and computation performance
 
