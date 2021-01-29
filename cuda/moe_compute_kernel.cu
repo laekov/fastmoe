@@ -228,10 +228,13 @@ std::vector<torch::Tensor> moe_cuda_local_scatter(
     torch::Tensor input,
 	torch::Tensor pos) {
 	auto smgr = getCudaStreamManager(input.device().index());
-	const auto batch_size = input.size(0);
+	const auto batch_size = pos.size(0);
     const auto in_feat = input.size(1);
 
-	auto input_buf = torch::empty_like(input);
+	auto opt = torch::TensorOptions()
+		.dtype(input.dtype())
+		.device(input.device());
+	auto input_buf = torch::empty({batch_size, in_feat}, opt);
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "moe_local_scatter_cuda", 
 			([&] {
@@ -250,10 +253,13 @@ std::vector<torch::Tensor> moe_cuda_local_gather(
 	torch::Tensor output_buf,
 	torch::Tensor pos) {
 	auto smgr = getCudaStreamManager(output_buf.device().index());
-	const auto batch_size = output_buf.size(0);
+	const auto batch_size = pos.size(0);
     const auto out_feat = output_buf.size(1);
 
-	auto output = torch::empty_like(output_buf);
+	auto opt = torch::TensorOptions()
+		.dtype(output_buf.dtype())
+		.device(output_buf.device());
+	auto output = torch::empty({batch_size, out_feat}, opt);
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(output_buf.scalar_type(), "moe_local_gather_cuda", 
 			([&] {

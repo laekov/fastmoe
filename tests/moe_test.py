@@ -88,9 +88,13 @@ def test_module(moe, linear, inp, gate):
     return output, moe.weight.grad, linear.weight.grad, linear.bias.grad
 
 
+rank = None
+world_size = None
+
+
 def test():
-    torch.manual_seed(42 + torch.distributed.get_rank())
-    torch.cuda.manual_seed(42 + torch.distributed.get_rank())
+    torch.manual_seed(42 + rank)
+    torch.cuda.manual_seed(42 + rank)
     batch_size = 4
     num_expert = 2
     in_feat = 6
@@ -123,13 +127,10 @@ def test():
 
     names = ['Out', 'Moe wei', 'Linear wei', 'Linear bias']
     if world_size > 1:
-        rank = torch.distributed.get_rank()
         ou, wg, lwg, lbg = raw_out
         torch.distributed.all_reduce(wg)
         wg = wg[rank * num_expert:(rank + 1)* num_expert]
         raw_out = ou, wg, lwg, lbg
-    else:
-        rank = 0
     for name, mo, ro in zip(names, moe_out, raw_out):
         err = (mo - ro).abs().sum()
         print('Rank {} {} abs err {}'.format(rank, name, err))
@@ -166,11 +167,15 @@ def test_dp():
 
 
 if __name__ == '__main__':
-    os.environ['RANK'] = os.environ.get('OMPI_COMM_WORLD_RANK', 0)
-    os.environ['WORLD_SIZE'] = os.environ.get('OMPI_COMM_WORLD_SIZE', 1)
-    torch.distributed.init_process_group(backend='nccl')
-    rank = torch.distributed.get_rank()
-    world_size = torch.distributed.get_world_size()
+    os.environ['RANK'] = os.environ.get('OMPI_COMM_WORLD_RANK', '0')
+    os.environ['WORLD_SIZE'] = os.environ.get('OMPI_COMM_WORLD_SIZE', '1')
+    if int(os.environ['WORLD_SIZE']) > 1:
+        torch.distributed.init_process_group(backend='nccl')
+        rank = torch.distributed.get_rank()
+        world_size = torch.distributed.get_world_size()
+    else:
+        rank = 0
+        world_size = 1
     if len(sys.argv) >= 2:
         task = sys.argv[1]
         print('Specificed task {}'.format(task))
