@@ -31,8 +31,8 @@ template <typename scalar_t>
 __global__
 void batch_scatter_kernel(size_t wid, const long* pos, 
 		const scalar_t* inbuf, scalar_t* oubuf) { 
-	inbuf += wid * blockIdx.x;
-	oubuf += wid * pos[blockIdx.x];
+	inbuf += wid * pos[blockIdx.x];
+	oubuf += wid * blockIdx.x;
 	for (int i = threadIdx.x; i < wid; i += blockDim.x) {
 		oubuf[i] = inbuf[i];
 	}
@@ -92,8 +92,8 @@ template <typename scalar_t>
 __global__
 void batch_gather_kernel(size_t wid, const long* pos, 
 		const scalar_t* inbuf, scalar_t* oubuf) { 
-	inbuf += wid * pos[blockIdx.x];
-	oubuf += wid * blockIdx.x;
+	inbuf += wid * blockIdx.x;
+	oubuf += wid * pos[blockIdx.x];
 	for (int i = threadIdx.x; i < wid; i += blockDim.x) {
 		oubuf[i] = inbuf[i];
 	}
