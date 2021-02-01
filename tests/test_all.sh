@@ -23,4 +23,4 @@ runtest $TEST_SCRIPT tests/test_numerical.py
 runtest mpirun -n 2 $TEST_SCRIPT tests/test_numerical.py
 runtest $TEST_SCRIPT tests/test_dp.py
 runtest $TEST_SCRIPT tests/test_performance.py
-runtest $TEST_SCRIPT mpirun -n 2 tests/test_performance.py
+runtest mpirun -n 2 $TEST_SCRIPT tests/test_performance.py
