@@ -1,4 +1,4 @@
-from .fmoe_functions import *
+from .functions import *
 import torch.nn as nn
 import torch.nn.functional as F
 
