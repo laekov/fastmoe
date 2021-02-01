@@ -3,8 +3,11 @@ from torch.autograd import Function
 import fmoe_cuda
 
 
-def moe_prepare_forward(gate, num_expert, world_size):
-    fmoe_cuda.ensure_nccl(torch.distributed.distributed_c10d._default_pg, gate)
+def moe_prepare_forward(gate, num_expert, world_size, comm=None):
+    if comm is None:
+        comm = torch.distributed.distributed_c10d._default_pg
+    if world_size > 1:
+        fmoe_cuda.ensure_nccl(comm, gate)
 
     with torch.no_grad():
         _, pos = torch.sort(gate)

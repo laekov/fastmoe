@@ -3,28 +3,27 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 
-from .moe_function import moe
+from fmoe.layers import FMoELinear, _fmoe_full_forward
 
 
 class FMoE(nn.Module):
     def __init__(self, num_expert=32, in_feat=1024, out_feat=1024,
-            world_size=None):
+            world_size=1):
         super(FMoE, self).__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.world_size = world_size
-        self.weight = nn.Parameter(
-            torch.Tensor(num_expert, out_feat, in_feat))
+        self.linear = FMoELinear(num_expert, in_feat, out_feat)
+        self.weight = self.linear.weight
         self.reset_parameters()
 
     def reset_parameters(self):
-        for i in range(self.num_expert):
-            linear = nn.Linear(in_features=self.in_feat, out_features=self.out_feat)
-            self.weight.data[i] = linear.weight.data
+        self.linear.reset_parameters()
 
     def forward(self, inp, gate):
-        return moe(inp, gate.int(), self.weight, self.world_size)
+        return _fmoe_full_forward(inp, gate, [self.linear], None,
+                self.num_expert, self.world_size)
 
 
 class BruteForceMoE(nn.Module):

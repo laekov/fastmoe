@@ -57,7 +57,7 @@ def _fmoe_full_forward(inp, gate, linears, activation, num_expert, world_size):
 
 class FMoETransformerMLP(nn.Module):
     def __init__(self, num_expert=32, d_model=1024, d_hidden=4096, 
-            world_size=None, activation=torch.nn.functional.gelu,
+            world_size=1, activation=torch.nn.functional.gelu,
             top_k=2, pre_lnorm=False):
         super(FMoETransformerMLP, self).__init__()
         self.num_expert = num_expert

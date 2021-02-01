@@ -1,5 +1,5 @@
-from fmoe import FMoE as MOELayer 
-from fmoe import BruteForceMoE as MOELayer_raw
+from moe import FMoE as MOELayer 
+from moe import BruteForceMoE as MOELayer_raw
 import torch
 from torch import nn
 import time
@@ -82,7 +82,6 @@ def test_module(moe, linear, inp, gate):
     moe.zero_grad()
     x = (linear(inp))
     output = moe(x, gate)
-    # print('ooutput', torch.distributed.get_rank(), output)
     y = output.mean()
     y.backward()
     return output, moe.weight.grad, linear.weight.grad, linear.bias.grad
@@ -102,10 +101,7 @@ def test():
 
     linear = nn.Linear(in_feat, in_feat).cuda()
 
-    if world_size > 1:
-        moe = MOELayer(num_expert, in_feat, out_feat, world_size).cuda()
-    else:
-        moe = MOELayer(num_expert, in_feat, out_feat).cuda()
+    moe = MOELayer(num_expert, in_feat, out_feat, world_size).cuda()
     moe_raw = MOELayer_raw(num_expert, in_feat, out_feat, world_size).cuda()
     if world_size == 1:
         moe_raw.weight.data = moe.weight.data.clone()
