@@ -99,12 +99,15 @@ class FMoETransformerMLP(nn.Module):
         )
 
     def forward(self, inp: torch.Tensor):
-        if self.num_expert != 1:
-            B: int = inp.shape[1]
+        original_shape = inp.shape
+        inp = inp.reshape(-1, self.d_model)
+
+        if self.model_parallel_size > 1:
+            B: int = inp.shape[0]
             local_batch_size = B // self.model_parallel_size
             batch_start = local_batch_size * self.model_parallel_rank
             batch_end = min(batch_start + local_batch_size, B)
-            inp = inp[:, batch_start:batch_end, :].contiguous()
+            inp = inp[batch_start:batch_end]
 
         residual = inp
         if self.pre_lnorm:
@@ -112,9 +115,9 @@ class FMoETransformerMLP(nn.Module):
 
         gate_top_k_idx, gate_score = self.gate(inp)
 
-        inp = inp.view(-1, self.d_model).repeat_interleave(
-            repeats=self.top_k, dim=0
-        )  # (BxLxtop_k) x d_model
+        # to: (BxLxtop_k) x d_model
+        inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
+
         x = _fmoe_full_forward(
             inp,
             gate_top_k_idx,
@@ -124,26 +127,20 @@ class FMoETransformerMLP(nn.Module):
             self.world_size,
         )
 
-        core_out = x.view(-1, self.top_k, self.d_model)  # (BxL) x top_k x d_model
-        core_out = torch.bmm(gate_score, core_out)  # (BxL) x 1 x d_model
-        core_out = core_out.view(residual.size(0), residual.size(1), self.d_model)
+        # to: (BxL) x top_k x d_model
+        core_out = x.view(-1, self.top_k, self.d_model)
+        # to: (BxL) x 1 x d_model
+        core_out = torch.bmm(gate_score, core_out)
         output = core_out + residual
 
         if not self.pre_lnorm:
             output = self.layer_norm(output)
 
-        if self.num_expert != 1:
+        if self.model_parallel_size > 1:
             world_size = self.model_parallel_size
-            if world_size == 1:
-                return output, self.bias
-
-            rank = self.model_parallel_rank
-
             tensor_list = [torch.empty_like(output) for _ in range(world_size)]
-            tensor_list[rank] = output
+
             torch.distributed.all_gather(tensor_list, output, group=self.group)
+            output = torch.cat(tensor_list, dim=1)
 
-            # Note: torch.cat already creates a contiguous tensor.
-            output = torch.cat(tensor_list, dim=1).contiguous()
-
-        return output, self.bias
+        return output.reshape(original_shape), self.bias
