@@ -9,8 +9,7 @@ class FMoELinear(nn.Module):
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
-        self.weight = nn.Parameter(
-            torch.Tensor(num_expert, out_feat, in_feat))
+        self.weight = nn.Parameter(torch.Tensor(num_expert, out_feat, in_feat))
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -30,35 +29,51 @@ class FMoENaiveGate(nn.Module):
 
     def forward(self, inp):
         gate = self.gate(inp)
-        gate_top_k_val, gate_top_k_idx = torch.topk(gate, k=self.top_k, dim=-1,
-                largest=True, sorted=False) # [.. x top_k]
+        gate_top_k_val, gate_top_k_idx = torch.topk(
+            gate, k=self.top_k, dim=-1, largest=True, sorted=False
+        )  # [.. x top_k]
         gate_top_k_val = gate_top_k_val.view(-1, self.top_k)
 
-        # (BxL) x 1 x top_k 
-        gate_score = F.softmax(gate_top_k_val, dim=-1).unsqueeze(1) 
-        gate_top_k_idx = gate_top_k_idx.view(-1) # (BxLxtop_k)
+        # (BxL) x 1 x top_k
+        gate_score = F.softmax(gate_top_k_val, dim=-1).unsqueeze(1)
+        gate_top_k_idx = gate_top_k_idx.view(-1)  # (BxLxtop_k)
 
         return gate_top_k_idx, gate_score
 
 
 def _fmoe_full_forward(inp, gate, linears, activation, num_expert, world_size):
-    (pos, local_expert_count, global_expert_count, fwd_expert_count, 
-            fwd_batch_size) = moe_prepare_forward(gate, num_expert, world_size)
-    x = MOEScatter.apply(inp, pos, local_expert_count, global_expert_count, 
-            fwd_batch_size, world_size)
+    (
+        pos,
+        local_expert_count,
+        global_expert_count,
+        fwd_expert_count,
+        fwd_batch_size,
+    ) = moe_prepare_forward(gate, num_expert, world_size)
+    x = MOEScatter.apply(
+        inp, pos, local_expert_count, global_expert_count, fwd_batch_size, world_size
+    )
     for i, l in enumerate(linears):
         if i:
             x = activation(x)
         x = l(x, fwd_expert_count)
-    x = MOEGather.apply(x, pos, local_expert_count, global_expert_count,
-            inp.shape[0], world_size)
+    x = MOEGather.apply(
+        x, pos, local_expert_count, global_expert_count, inp.shape[0], world_size
+    )
     return x
 
 
 class FMoETransformerMLP(nn.Module):
-    def __init__(self, num_expert=32, d_model=1024, d_hidden=4096, 
-            world_size=1, activation=torch.nn.functional.gelu,
-            top_k=2, pre_lnorm=False):
+    def __init__(
+        self,
+        num_expert=32,
+        d_model=1024,
+        d_hidden=4096,
+        world_size=1,
+        activation=torch.nn.functional.gelu,
+        top_k=2,
+        pre_lnorm=False,
+        model_parallel_rank=-1,
+    ):
         super(FMoETransformerMLP, self).__init__()
         self.num_expert = num_expert
         self.d_model = d_model
@@ -69,13 +84,15 @@ class FMoETransformerMLP(nn.Module):
         self.top_k = top_k
 
         self.htoh4 = FMoELinear(num_expert, d_model, d_hidden)
-        self.h4toh = FMoELinear(num_expert, d_hidden, d_model) 
+        self.h4toh = FMoELinear(num_expert, d_hidden, d_model)
 
         self.gate = FMoENaiveGate(d_model, num_expert, world_size, top_k)
 
         self.layer_norm = nn.LayerNorm(d_model)
-        self.bias = torch.nn.parameter.Parameter(torch.zeros(d_model,
-                dtype=torch.float32)) 
+        self.bias = torch.nn.parameter.Parameter(
+            torch.zeros(d_model, dtype=torch.float32)
+        )
+        self.model_parallel_rank = model_parallel_rank
 
     def forward(self, inp):
         residual = inp
@@ -85,18 +102,23 @@ class FMoETransformerMLP(nn.Module):
         gate_top_k_idx, gate_score = self.gate(inp)
 
         # TODO: merge replication into local_scatter
-        inp = inp.view(-1, self.d_model).repeat_interleave(repeats=self.top_k, 
-                dim=0) # (BxLxtop_k) x d_model
-        x = _fmoe_full_forward(inp, gate_top_k_idx, 
-                [self.htoh4, self.h4toh], self.activation,
-                self.num_expert, self.world_size)
+        inp = inp.view(-1, self.d_model).repeat_interleave(
+            repeats=self.top_k, dim=0
+        )  # (BxLxtop_k) x d_model
+        x = _fmoe_full_forward(
+            inp,
+            gate_top_k_idx,
+            [self.htoh4, self.h4toh],
+            self.activation,
+            self.num_expert,
+            self.world_size,
+        )
 
-        core_out = x.view(-1, self.top_k, self.d_model) # (BxL) x top_k x d_model 
-        core_out = torch.bmm(gate_score, core_out) # (BxL) x 1 x d_model
+        core_out = x.view(-1, self.top_k, self.d_model)  # (BxL) x top_k x d_model
+        core_out = torch.bmm(gate_score, core_out)  # (BxL) x 1 x d_model
         core_out = core_out.view(residual.size(0), residual.size(1), self.d_model)
         output = core_out + residual
 
         if not self.pre_lnorm:
             output = self.layer_norm(output)
         return output, self.bias
-
