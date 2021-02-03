@@ -71,7 +71,7 @@ class FMoETransformerMLP(nn.Module):
         world_size=1,
         model_parallel_size=1,
         model_parallel_rank=1,
-        group=None,
+        mp_group=None,
         activation=torch.nn.functional.gelu,
         top_k=2,
         pre_lnorm=False,
@@ -83,7 +83,7 @@ class FMoETransformerMLP(nn.Module):
         self.world_size = world_size
         self.model_parallel_size = model_parallel_size
         self.model_parallel_rank = model_parallel_rank
-        self.group = group
+        self.mp_group = mp_group
         self.activation = activation
         self.pre_lnorm = pre_lnorm
         self.top_k = top_k
@@ -140,7 +140,7 @@ class FMoETransformerMLP(nn.Module):
             world_size = self.model_parallel_size
             tensor_list = [torch.empty_like(output) for _ in range(world_size)]
 
-            torch.distributed.all_gather(tensor_list, output, group=self.group)
+            torch.distributed.all_gather(tensor_list, output, group=self.mp_group)
             output = torch.cat(tensor_list, dim=1)
 
         return output.reshape(original_shape), self.bias
