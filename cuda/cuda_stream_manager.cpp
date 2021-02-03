@@ -57,6 +57,10 @@ void CudaStreamManager::sync(int idx) {
 }
 
 void CudaStreamManager::setup(const int device) {
+#ifdef MOE_USE_NCCL
+	this->ncclgood = 0;
+#endif
+	this->device = device;
 	checkCudaErrors(cudaSetDevice(device));
 	streams = new cudaStream_t[SMGR_N_STREAMS];
 	handles = new cublasHandle_t[SMGR_N_STREAMS];

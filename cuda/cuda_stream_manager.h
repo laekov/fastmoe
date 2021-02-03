@@ -29,7 +29,7 @@ public:
 #endif
 
 public:
-    CudaStreamManager(int device_): device(device_), ncclgood(0) {
+    CudaStreamManager(int device_): device(device_) {
 		this->setup(device);
     }
 

@@ -197,7 +197,7 @@ std::vector<torch::Tensor> moe_cuda_global_gather(
 }
 
 void moe_ensure_nccl(c10d::ProcessGroupNCCL& p, torch::Tensor t) {
-	auto smgr = getCudaStreamManager(0);
+	auto smgr = getCudaStreamManager(t.device().index());
 	smgr->ensure((void*)&p, t.device());
 }
 
