@@ -1,7 +1,8 @@
 from .layers import FMoETransformerMLP
 from .distributed import DistributedGroupedDataParallel
 
-def create_moe_mlp(args, model_parallel_rank, group):
+
+def create_moe_mlp(args, group):
     assert (
         args.seq_length * args.batch_size % args.model_parallel_size == 0
     ), "Batch size x sequence length should be multiple of mp size"
@@ -14,9 +15,7 @@ def create_moe_mlp(args, model_parallel_rank, group):
         d_model=args.hidden_size,
         d_hidden=args.hidden_size * 4,
         world_size=world_size,
-        model_parallel_size=args.model_parallel_size,
-        model_parallel_rank=model_parallel_rank,
-        mp_group=group,
+        mp_group=group
     )
     for p in fmoe.gate.parameters():
         setattr(p, 'shared', True)
@@ -38,9 +37,7 @@ def fmoefy(model, num_experts=None, distributed_experts=True):
         args.distributed_experts = distributed_experts
 
     for l in model.language_model.transformer.layers:
-        l.mlp = create_moe_mlp(args,
-                mpu.get_model_parallel_rank(),
-                mpu.get_model_parallel_group())
+        l.mlp = create_moe_mlp(args, mpu.get_model_parallel_group())
     return model
 
 

@@ -69,8 +69,6 @@ class FMoETransformerMLP(nn.Module):
         d_model=1024,
         d_hidden=4096,
         world_size=1,
-        model_parallel_size=1,
-        model_parallel_rank=1,
         mp_group=None,
         activation=torch.nn.functional.gelu,
         top_k=2,
@@ -81,9 +79,13 @@ class FMoETransformerMLP(nn.Module):
         self.d_model = d_model
         self.d_hidden = d_hidden
         self.world_size = world_size
-        self.model_parallel_size = model_parallel_size
-        self.model_parallel_rank = model_parallel_rank
         self.mp_group = mp_group
+        if mp_group is None:
+            self.mp_size = 1
+            self.mp_rank = 0
+        else:
+            self.mp_size = mp_group.size()
+            self.mp_rank = mp_group.rank()
         self.activation = activation
         self.pre_lnorm = pre_lnorm
         self.top_k = top_k
@@ -104,10 +106,10 @@ class FMoETransformerMLP(nn.Module):
         original_shape = inp.shape
         inp = inp.reshape(-1, self.d_model)
 
-        if self.model_parallel_size > 1:
+        if self.mp_size > 1:
             B: int = inp.shape[0]
-            local_batch_size = B // self.model_parallel_size
-            batch_start = local_batch_size * self.model_parallel_rank
+            local_batch_size = B // self.mp_size
+            batch_start = local_batch_size * self.mp_rank
             batch_end = min(batch_start + local_batch_size, B)
             inp = inp[batch_start:batch_end]
 
@@ -138,11 +140,8 @@ class FMoETransformerMLP(nn.Module):
         if not self.pre_lnorm:
             output = self.layer_norm(output)
 
-        if self.model_parallel_size > 1:
-            world_size = self.model_parallel_size
-            tensor_list = [torch.empty_like(output) for _ in range(world_size)]
-
-            torch.distributed.all_gather(tensor_list, output, group=self.mp_group)
-            output = torch.cat(tensor_list, dim=1)
+        if self.mp_size > 1:
+            output = AllGather.apply(output, 
+                    self.mp_rank, self.mp_size, self.mp_group)
 
         return output.reshape(original_shape), self.bias

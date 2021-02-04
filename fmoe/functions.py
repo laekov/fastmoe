@@ -143,3 +143,19 @@ class MOEGather(Function):
         else:
             global_grad_out_buf = grad_out_buf
         return global_grad_out_buf, None, None, None, None, None
+
+
+class AllGather(Function):
+    @staticmethod
+    def forward(ctx, inp, rank, world_size, group):
+        tensor_list = [torch.empty_like(inp) for _ in range(world_size)]
+        torch.distributed.all_gather(tensor_list, inp, group=group)
+        torch.cuda.synchronize()
+        output = torch.cat(tensor_list, dim=0)
+        ctx.args = rank, inp.shape[0]
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        rank, dim0 = ctx.args
+        return grad_out[rank * dim0:(rank + 1) * dim0], None, None, None
