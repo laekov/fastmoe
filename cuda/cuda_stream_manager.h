@@ -25,7 +25,6 @@ public:
 #ifdef MOE_USE_NCCL
 	char ncclgood;
 	ncclComm_t ncclcomm;
-	void ensure(void*, class at::Device);
 #endif
 
 public:

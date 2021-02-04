@@ -109,18 +109,37 @@ std::vector<torch::Tensor> moe_global_fused_forward(
 			global_batch_size, local_batch_size, n_workers);
 }
 
-#endif
+#include <c10d/ProcessGroupNCCL.hpp>
+#include "cuda_stream_manager.h"
 
-/*
-int main() {
-    int device=2;
-    torch::Tensor input = torch::randn({2048, 512}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
-    torch::Tensor gate = torch::zeros({2048, 2}, torch::dtype(torch::kInt64));
-    torch::Tensor weight = torch::randn({2, 512, 2048}, torch::dtype(torch::kFloat32).device(torch::kCUDA, device));
-    checkCudaErrors(cudaSetDevice(device));
-    moe_cuda_forward(input, gate, weight);
+class HackNCCLGroup: public c10d::ProcessGroupNCCL {
+public:
+	ncclComm_t getcomm(at::Device dev) {
+		auto key = std::to_string(dev.index());
+		auto v = getNCCLComm(key, {dev}, c10d::OpType::ALLTOALL);
+		if (v.size() == 0) {
+			std::cerr << "PyTorch has nothing\n";
+			return 0;
+		}
+		return v[0]->getNcclComm();
+	}
+};
+
+void moe_ensure_nccl(c10d::ProcessGroupNCCL& p, torch::Tensor t) {
+	auto smgr = getCudaStreamManager(t.device().index());
+	if (smgr->ncclgood) {
+		return;
+	}
+	HackNCCLGroup* h = (HackNCCLGroup*)(void*)&p;
+	smgr->ncclcomm = h->getcomm(t.device());
+	if (smgr->ncclcomm != 0) {
+		smgr->ncclgood = 1;
+	} else {
+		std::cerr << "Nccl initialization failed\n";
+	}
 }
-*/
+
+#endif  // MOE_USE_NCCL
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("expert_count", &moe_expert_count, "MoE expert count (CUDA)");

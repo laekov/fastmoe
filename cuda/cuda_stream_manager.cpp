@@ -4,42 +4,10 @@
 #include <thread>
 #include <iostream>
 
-#ifdef MOE_USE_NCCL
-#include <c10d/ProcessGroupNCCL.hpp>
-#endif  // MOE_USE_NCCL
-
 #include "cuda_stream_manager.h"
 #include <helper_cuda.h> 
 
 #define SMGR_N_STREAMS 16
-
-#ifdef MOE_USE_NCCL
-class HackNCCLGroup: public c10d::ProcessGroupNCCL {
-public:
-	ncclComm_t getcomm(at::Device dev) {
-		auto key = std::to_string(dev.index());
-		auto v = getNCCLComm(key, {dev}, c10d::OpType::ALLTOALL);
-		if (v.size() == 0) {
-			std::cerr << "PyTorch has nothing\n";
-			return 0;
-		}
-		return v[0]->getNcclComm();
-	}
-};
-
-void CudaStreamManager::ensure(void* torchp, at::Device dev) {
-	if (this->ncclgood) {
-		return;
-	}
-	HackNCCLGroup* h = (HackNCCLGroup*)torchp;
-	this->ncclcomm = h->getcomm(dev);
-	if (this->ncclcomm != 0) {
-		this->ncclgood = 1;
-	} else {
-		std::cerr << "Nccl initialization failed\n";
-	}
-}
-#endif  // MOE_USE_NCCL
 
 cudaStream_t CudaStreamManager::stream(size_t idx) {
 	return this->streams[idx % SMGR_N_STREAMS];

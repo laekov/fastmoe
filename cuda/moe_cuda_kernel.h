@@ -41,9 +41,6 @@ std::vector<torch::Tensor> moe_cuda_global_gather(
 	torch::Tensor global_expert_count,
 	long batch_size, long n_workers);
 
-#include <c10d/ProcessGroupNCCL.hpp>
-void moe_ensure_nccl(c10d::ProcessGroupNCCL&, torch::Tensor t);
-
 std::vector<torch::Tensor> moe_cuda_expert_exchange(
 	torch::Tensor local_expert_count,
 	long num_expert, long n_workers);
