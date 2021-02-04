@@ -1,9 +1,25 @@
+r"""
+The fmoe.functions module contains functions that are directly warped up from
+C/CUDA functions to complete distributed communication, computation and gradient
+computation.
+"""
+
 import torch
 from torch.autograd import Function
 import fmoe_cuda
 
 
 def moe_prepare_forward(gate, num_expert, world_size, comm=None):
+    r"""
+    Prepare necessary information from gate output for MoE computation.
+
+    Args:
+        gate: a 1-d Long Tensor representing the target expert of each input
+        sample.
+        num_expert: number of experts on each worker.
+        world_size: number of workers that hold different experts.
+        comm: the communicator of all workers in the expert-parallel group.
+    """
     if comm is None:
         comm = torch.distributed.distributed_c10d._default_pg
     if world_size > 1:
@@ -35,6 +51,11 @@ def moe_prepare_forward(gate, num_expert, world_size, comm=None):
 
 
 class MOEScatter(Function):
+    r"""
+    Scatter input samples from [batch x sequences] to contiguous alone experts.
+    If `world_size` is greater than 1, the samples will first be locally
+    scattered, and then exchanged across workers.
+    """
     @staticmethod
     def forward(
         ctx,
@@ -56,7 +77,7 @@ class MOEScatter(Function):
             )
         else:
             global_input_buf = local_input_buf
-        ctx.moe_args = fwd_batch_size, inp.shape[0], world_size
+        ctx.moe_args = inp.shape[0], world_size
         variables = (pos, local_expert_count, global_expert_count)
         ctx.save_for_backward(*variables)
         return global_input_buf
@@ -64,7 +85,7 @@ class MOEScatter(Function):
     @staticmethod
     def backward(ctx, global_grad_in):
         (pos, local_expert_count, global_expert_count) = ctx.saved_tensors
-        (fwd_batch_size, local_batch_size, world_size) = ctx.moe_args
+        (local_batch_size, world_size) = ctx.moe_args
 
         if world_size > 1:
             (local_grad_in,) = fmoe_cuda.global_gather(
@@ -81,6 +102,9 @@ class MOEScatter(Function):
 
 
 class MOELinear(Function):
+    r"""
+    Computes linear operators within one GPU on different experts simutaneously.
+    """
     @staticmethod
     def forward(ctx, global_input_buf, weight, fwd_expert_count):
         (global_output_buf,) = fmoe_cuda.forward(
@@ -100,6 +124,10 @@ class MOELinear(Function):
 
 
 class MOEGather(Function):
+    r"""
+    Gather output samples from contiguous alone experts back to [batch x
+    sequences]. Works symmetrically with MOEScatter.
+    """
     @staticmethod
     def forward(
         ctx,
@@ -122,7 +150,7 @@ class MOEGather(Function):
             local_output_buf = global_output_buf
         (output,) = fmoe_cuda.local_gather(local_output_buf, pos)
 
-        ctx.moe_args = local_batch_size, global_output_buf.shape[0], world_size
+        ctx.moe_args = (global_output_buf.shape[0], world_size)
         variables = (pos, local_expert_count, global_expert_count)
         ctx.save_for_backward(*variables)
         return output
@@ -130,7 +158,7 @@ class MOEGather(Function):
     @staticmethod
     def backward(ctx, grad_out):
         pos, local_expert_count, global_expert_count = ctx.saved_tensors
-        local_batch_size, fwd_batch_size, world_size = ctx.moe_args
+        fwd_batch_size, world_size = ctx.moe_args
         (grad_out_buf,) = fmoe_cuda.local_scatter(grad_out.contiguous(), pos)
         if world_size > 1:
             (global_grad_out_buf,) = fmoe_cuda.global_scatter(
