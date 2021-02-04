@@ -17,9 +17,9 @@ class DistributedGroupedDataParallel(nn.Module):
         if dp_group is not None:
             self.comms['dp'] = dp_group
         else:
-            self.comms['dp'] = torch.distributed.distributed_c10d._default_pg
+            self.comms['dp'] = torch.distributed.distributed_c10d._get_default_group()
         if world_group is None:
-            self.comms['world'] = torch.distributed.distributed_c10d._default_pg
+            self.comms['world'] = torch.distributed.distributed_c10d._get_default_group()
         else:
             self.comms['world'] = world_group
 

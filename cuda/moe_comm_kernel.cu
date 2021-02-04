@@ -8,7 +8,6 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <helper_cuda.h> 
-#include <c10/cuda/CUDAGuard.h>
 
 #include "cuda_stream_manager.h"
 

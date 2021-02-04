@@ -18,7 +18,7 @@ class HackNCCLGroup: public c10d::ProcessGroupNCCL {
 public:
 	ncclComm_t getcomm(at::Device dev) {
 		auto key = std::to_string(dev.index());
-		auto v = getNCCLComm(key, {dev});
+		auto v = getNCCLComm(key, {dev}, c10d::OpType::ALLTOALL);
 		if (v.size() == 0) {
 			std::cerr << "PyTorch has nothing\n";
 			return 0;

@@ -4,7 +4,7 @@ from .distributed import DistributedGroupedDataParallel
 
 def create_moe_mlp(args, group):
     assert (
-        args.seq_length * args.batch_size % args.model_parallel_size == 0
+        args.seq_length * args.micro_batch_size % args.tensor_model_parallel_size == 0
     ), "Batch size x sequence length should be multiple of mp size"
     if not args.distributed_experts:
         world_size = 1

@@ -21,7 +21,7 @@ def moe_prepare_forward(gate, num_expert, world_size, comm=None):
         comm: the communicator of all workers in the expert-parallel group.
     """
     if comm is None:
-        comm = torch.distributed.distributed_c10d._default_pg
+        comm = torch.distributed.distributed_c10d._get_default_group()
     if world_size > 1:
         fmoe_cuda.ensure_nccl(comm, gate)
 
