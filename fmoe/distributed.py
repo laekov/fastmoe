@@ -29,20 +29,20 @@ class DistributedGroupedDataParallel(nn.Module):
             for p in self.module.parameters():
                 if not p.requires_grad or p.grad is None:
                     continue
-                if hasattr(p, 'parallel_method'):
-                    pm = p.parallel_method
+                if hasattr(p, 'dp_comm'):
+                    dp_comm = p.dp_comm
                 else:
-                    pm = 'dp'
-                group_key = (pm, p.dtype)
+                    dp_comm = 'dp'
+                group_key = (dp_comm, p.dtype)
                 if group_key not in groups:
                     groups[group_key] = [p]
                 else:
                     groups[group_key].append(p)
-            for pm, dtype in groups:
-                if pm not in self.comms:
+            for dp_comm, dtype in groups:
+                if dp_comm not in self.comms:
                     continue
-                group = groups[pm, dtype]
-                comm = self.comms[pm]
+                group = groups[dp_comm, dtype]
+                comm = self.comms[dp_comm]
                 grads = [p.grad.data for p in group]
                 coalesced = _flatten_dense_tensors(grads)
                 if fp32_allreduce and dtype != torch.float32:

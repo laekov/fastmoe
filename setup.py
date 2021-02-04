@@ -29,7 +29,7 @@ if __name__ == '__main__':
                     }
                 )
             ],
-        version='0.0.1',
+        version='0.0.2',
         cmdclass={
             'build_ext': BuildExtension
         })

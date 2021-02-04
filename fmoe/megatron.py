@@ -18,6 +18,8 @@ def create_moe_mlp(args, model_parallel_rank, group):
         model_parallel_rank=model_parallel_rank,
         mp_group=group,
     )
+    for p in fmoe.gate.parameters():
+        setattr(p, 'shared', True)
     return fmoe
 
 

@@ -92,6 +92,8 @@ class FMoETransformerMLP(nn.Module):
         self.h4toh = FMoELinear(num_expert, d_hidden, d_model)
 
         self.gate = FMoENaiveGate(d_model, num_expert, world_size, top_k)
+        for p in self.gate.parameters():
+            setattr(p, 'dp_comm', 'world')
 
         self.layer_norm = nn.LayerNorm(d_model)
         self.bias = torch.nn.parameter.Parameter(
