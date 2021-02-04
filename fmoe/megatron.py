@@ -1,11 +1,11 @@
 from .layers import FMoETransformerMLP
-
+from .distributed import DistributedGroupedDataParallel
 
 def create_moe_mlp(args, model_parallel_rank, group):
     assert (
         args.seq_length * args.batch_size % args.model_parallel_size == 0
     ), "Batch size x sequence length should be multiple of mp size"
-    if args.model_parallel_size == 1:
+    if not args.distributed_experts:
         world_size = 1
     else:
         world_size = args.world_size
@@ -21,7 +21,7 @@ def create_moe_mlp(args, model_parallel_rank, group):
     return fmoe
 
 
-def fmoefy(model, num_experts=None):
+def fmoefy(model, num_experts=None, distributed_experts=True):
     from megatron import get_args
     from megatron import mpu
     args = get_args()
@@ -30,8 +30,23 @@ def fmoefy(model, num_experts=None):
     assert (
         'num_experts' in args
     ), 'num_experts should be specified in arguments or fmoefy function'
+
+    # Set distributed_experts to None to use default setting in args
+    if distributed_experts is not None:
+        args.distributed_experts = distributed_experts
+
     for l in model.language_model.transformer.layers:
         l.mlp = create_moe_mlp(args,
                 mpu.get_model_parallel_rank(),
                 mpu.get_model_parallel_group())
     return model
+
+
+class DistributedDataParallel(DistributedGroupedDataParallel):
+    def __init__(self, module):
+        from megatron import mpu
+        super(DistributedDataParallel, self).__init__(
+            module,
+            mp_group=mpu.get_model_parallel_group(),
+            dp_group=mpu.get_data_parallel_group()
+        )
