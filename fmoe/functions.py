@@ -7,6 +7,7 @@ computation.
 import torch
 from torch.autograd import Function
 import fmoe_cuda
+from .utils import get_torch_default_comm
 
 
 def moe_prepare_forward(gate, num_expert, world_size, comm=None):
@@ -21,7 +22,7 @@ def moe_prepare_forward(gate, num_expert, world_size, comm=None):
         comm: the communicator of all workers in the expert-parallel group.
     """
     if comm is None:
-        comm = torch.distributed.distributed_c10d._get_default_group()
+        comm = get_torch_default_comm()
     if world_size > 1:
         fmoe_cuda.ensure_nccl(comm, gate)
 

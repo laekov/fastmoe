@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from .utils import get_torch_default_comm
 
 
 class DistributedGroupedDataParallel(nn.Module):
@@ -17,9 +18,9 @@ class DistributedGroupedDataParallel(nn.Module):
         if dp_group is not None:
             self.comms['dp'] = dp_group
         else:
-            self.comms['dp'] = torch.distributed.distributed_c10d._get_default_group()
+            self.comms['dp'] = get_torch_default_comm()
         if world_group is None:
-            self.comms['world'] = torch.distributed.distributed_c10d._get_default_group()
+            self.comms['world'] = get_torch_default_comm()
         else:
             self.comms['world'] = world_group
 
