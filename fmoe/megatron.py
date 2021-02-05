@@ -49,3 +49,12 @@ class DistributedDataParallel(DistributedGroupedDataParallel):
             mp_group=mpu.get_model_parallel_group(),
             dp_group=mpu.get_data_parallel_group()
         )
+
+    def state_dict(self, *args, **kwargs):
+        return self.module.state_dict(*args, **kwargs)
+
+    def state_dict_for_save_checkpoint(self, *args, **kwargs):
+        return self.module.state_dict_for_save_checkpoint(*args, **kwargs)
+
+    def load_state_dict(self, *args, **kwargs):
+        return self.module.load_state_dict(*args, **kwargs)
