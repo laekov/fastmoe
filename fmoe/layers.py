@@ -148,6 +148,12 @@ class FMoETransformerMLP(nn.Module):
         self.htoh4 = FMoELinear(num_expert, d_model, d_hidden)
         self.h4toh = FMoELinear(num_expert, d_hidden, d_model)
 
+        if self.world_size > self.mp_size:
+            for p in self.htoh4.parameters():
+                setattr(p, 'dp_comm', 'none')
+            for p in self.h4toh.parameters():
+                setattr(p, 'dp_comm', 'none')
+
         self.gate = FMoENaiveGate(d_model, num_expert, world_size, top_k)
         for p in self.gate.parameters():
             setattr(p, 'dp_comm', 'world')

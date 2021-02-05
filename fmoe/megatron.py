@@ -1,10 +1,11 @@
-'''
+r'''
 The adaptor to seamlessly enable FastMoE in Megatron-LM v2.0 with at most two
 lines of modification.
 See `exapmles/megatron` for usage instructions.
 '''
 from .layers import FMoETransformerMLP
 from .distributed import DistributedGroupedDataParallel
+from .utils import get_torch_default_comm
 
 
 def _create_moe_mlp(args, group):
@@ -42,9 +43,11 @@ def fmoefy(model, num_experts=None, distributed_experts=True):
     they are trained in data-parallel mode. This can be useful when testing on
     small models that do not require high training throughput or large parameter
     capacity.
+    Note that pipeline parallel is not supported yet. When distributed experts
+    are enabled, their communicator should be Megatron's
+    tensor_model_parall_comm x data_parallel_comm, which is not created.
     '''
     from megatron import get_args
-    from megatron import mpu
     args = get_args()
     if num_experts is not None:
         args.num_experts = num_experts
@@ -57,7 +60,7 @@ def fmoefy(model, num_experts=None, distributed_experts=True):
         args.distributed_experts = distributed_experts
 
     for l in model.language_model.transformer.layers:
-        l.mlp = _create_moe_mlp(args, mpu.get_model_parallel_group())
+        l.mlp = _create_moe_mlp(args, get_torch_default_comm())
     return model
 
 
