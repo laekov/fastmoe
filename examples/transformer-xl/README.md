@@ -1,3 +1,11 @@
+This directory contains an example based on Zihang Dai, et.al's open-source
+transformer [implementation](https://github.com/kimiyoung/transformer-xl) to
+demostrate the usage of the usage of Fast MoE's layers.
+
+The code is released with Apache-2.0 license. Here, only the pytorch part of the
+code is used, with modification in the `mem_transformer.py` file to enable MoE
+training.
+
 ## Introduction
 
 This directory contains our pytorch implementation of Transformer-XL. Note that our state-of-the-art results reported in the paper were obtained by training the model on a large-scale TPU cluster, and our pytorch codebase currently does not support distributed training. Here we provide two sets of hyperparameters and scripts:
