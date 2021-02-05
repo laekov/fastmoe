@@ -21,9 +21,9 @@ def moe_prepare_forward(gate, num_expert, world_size, comm=None):
         world_size: number of workers that hold different experts.
         comm: the communicator of all workers in the expert-parallel group.
     """
-    if comm is None:
-        comm = get_torch_default_comm()
     if world_size > 1:
+        if comm is None:
+            comm = get_torch_default_comm()
         fmoe_cuda.ensure_nccl(comm, gate)
 
     with torch.no_grad():
