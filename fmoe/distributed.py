@@ -1,3 +1,6 @@
+r'''
+Supportive modules to conduct distributed training
+'''
 import torch
 import torch.nn as nn
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
@@ -5,11 +8,24 @@ from .utils import get_torch_default_comm
 
 
 class DistributedGroupedDataParallel(nn.Module):
+    r'''
+    A customized DDP module to support different all-reduce regions in the
+    model.  The all-reduce region is defined as an attribution `dp_comm` in the
+    weight object.
+    The grads of the weights are identified to be reduced in different groups
+    according to the weigths' `dp_comm` attribute.
+    If it is set to `dp`, it will only be reduced across the data-parallel
+    groups, which means that in the model parallel group, they are not
+    synchronized.
+    If it is set to `world`, the gradients is synchronized across all workers,
+    regardless their model or data parallel group. This is extremely useful for
+    shared layers like the gate.
+    '''
     def __init__(self, module, mp_group=None, dp_group=None, world_group=None,
             auto_allreduce=False):
         assert not auto_allreduce, 'Automatic all-reduce is not implemented yet'
 
-        super(DistributedGroupedDataParallel, self).__init__()
+        super().__init__()
         self.module = module
 
         self.comms = dict()
@@ -24,7 +40,7 @@ class DistributedGroupedDataParallel(nn.Module):
         else:
             self.comms['world'] = world_group
 
-        def allreduce_params(no_scale=False, reduce_after=False, 
+        def allreduce_params(no_scale=False, reduce_after=False,
                 fp32_allreduce=False):
             groups = dict()
             for p in self.module.parameters():
@@ -39,10 +55,9 @@ class DistributedGroupedDataParallel(nn.Module):
                     groups[group_key] = [p]
                 else:
                     groups[group_key].append(p)
-            for dp_comm, dtype in groups:
+            for (dp_comm, dtype), group in groups.items():
                 if dp_comm not in self.comms:
                     continue
-                group = groups[dp_comm, dtype]
                 comm = self.comms[dp_comm]
                 grads = [p.grad.data for p in group]
                 coalesced = _flatten_dense_tensors(grads)
@@ -61,5 +76,7 @@ class DistributedGroupedDataParallel(nn.Module):
         self.allreduce_params = allreduce_params
 
     def forward(self, *args, **kwargs):
+        r'''
+        Directly call the module's forward function.
+        '''
         return self.module(*args, **kwargs)
-

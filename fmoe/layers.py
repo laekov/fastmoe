@@ -1,11 +1,24 @@
-from .functions import *
+r'''
+Layers that FMoE provides to users
+'''
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .functions import moe_prepare_forward
+from .functions import MOEScatter, MOEGather, MOELinear
+from .functions import AllGather
+
 
 class FMoELinear(nn.Module):
+    r'''
+    A linear layer that contains multiple experts.
+    As multiple experts can be placed on the same worker, the computation can be
+    performed in parallel to increase the performance.
+    The FMoELinear module provides such function.
+    '''
     def __init__(self, num_expert=32, in_feat=1024, out_feat=1024):
-        super(FMoELinear, self).__init__()
+        super().__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
@@ -13,21 +26,40 @@ class FMoELinear(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
+        r'''
+        Initialize the weight as linear layers
+        '''
         for i in range(self.num_expert):
-            linear = nn.Linear(in_features=self.in_feat, out_features=self.out_feat)
+            linear = nn.Linear(in_features=self.in_feat,
+                    out_features=self.out_feat)
             self.weight.data[i] = linear.weight.data
 
     def forward(self, inp, fwd_expert_count):
+        r'''
+        Call MOE function
+        '''
         return MOELinear.apply(inp, self.weight, fwd_expert_count)
 
 
 class FMoENaiveGate(nn.Module):
+    r'''
+    A naive gate implementation that defines the standard behavior of the gate
+    which determines which experts the tokens are going to.
+    Both the indecies and the score, or confidence, are output to the parent
+    module.
+    The load-balance strategies are also designed to be implemented within the
+    `Gate` module.
+    '''
     def __init__(self, d_model, num_expert, world_size, top_k=2):
-        super(FMoENaiveGate, self).__init__()
+        super().__init__()
         self.gate = nn.Linear(d_model, num_expert * world_size)
         self.top_k = top_k
 
     def forward(self, inp):
+        r'''
+        The naive implementation simply calculates the top-k of a linear layer's
+        output.
+        '''
         gate = self.gate(inp)
         gate_top_k_val, gate_top_k_idx = torch.topk(
             gate, k=self.top_k, dim=-1, largest=True, sorted=False
@@ -42,15 +74,25 @@ class FMoENaiveGate(nn.Module):
 
 
 def _fmoe_full_forward(inp, gate, linears, activation, num_expert, world_size):
+    r'''
+    A private function that performs the following steps to complete the MoE
+    computation.
+    * Count the number of tokens from each worker to each expert.
+    * Send the features to their target position so that input features to each
+    expert are contiguous in memory.
+    * Perform the MLP of the experts by applying MoELinear and the activation in
+    turns.
+    * Gather the output features of experts back, and reorder them as sentences.
+    Intermediate results like expert counts are hidden from users by this
+    function.
+    '''
     (
-        pos,
-        local_expert_count,
-        global_expert_count,
-        fwd_expert_count,
-        fwd_batch_size,
+        pos, local_expert_count, global_expert_count, fwd_expert_count,
+        fwd_batch_size
     ) = moe_prepare_forward(gate, num_expert, world_size)
     x = MOEScatter.apply(
-        inp, pos, local_expert_count, global_expert_count, fwd_batch_size, world_size
+        inp, pos, local_expert_count, global_expert_count, fwd_batch_size,
+        world_size
     )
     for i, l in enumerate(linears):
         if i:
@@ -63,6 +105,19 @@ def _fmoe_full_forward(inp, gate, linears, activation, num_expert, world_size):
 
 
 class FMoETransformerMLP(nn.Module):
+    r'''
+    A complete MoE MLP module in a Transformer block.
+    * `num_expert` stands for the number of experts on **each** worker.
+    * `world_size` stands for the total number of workers that contains
+    different experts.
+    * `mp_group` can be a torch's communication group, indicating that model
+    parallel is applied across the group, which means that workers in the group
+    hold the same copy of the input feature, and demands the same copy of the
+    output. FMoE saves computation by slicing the input in the mp group and
+    performing all-gather after the MLP computation.
+    * `activation` is the activation function to be used in MLP in each expert.
+    * `top_k` stands for the number of experts each token is going to.
+    '''
     def __init__(
         self,
         num_expert=32,
@@ -72,9 +127,9 @@ class FMoETransformerMLP(nn.Module):
         mp_group=None,
         activation=torch.nn.functional.gelu,
         top_k=2,
-        pre_lnorm=False,
+        pre_lnorm=False
     ):
-        super(FMoETransformerMLP, self).__init__()
+        super().__init__()
         self.num_expert = num_expert
         self.d_model = d_model
         self.d_hidden = d_hidden
@@ -103,6 +158,11 @@ class FMoETransformerMLP(nn.Module):
         )
 
     def forward(self, inp: torch.Tensor):
+        r'''
+        The FMoETransformerMLP module automatically performs reshape and layer
+        normalization. The score of the selected gate given by the expert is
+        multiplied to the experts' output tensors as a weight.
+        '''
         original_shape = inp.shape
         inp = inp.reshape(-1, self.d_model)
 
@@ -141,7 +201,7 @@ class FMoETransformerMLP(nn.Module):
             output = self.layer_norm(output)
 
         if self.mp_size > 1:
-            output = AllGather.apply(output, 
+            output = AllGather.apply(output,
                     self.mp_rank, self.mp_size, self.mp_group)
 
         return output.reshape(original_shape), self.bias

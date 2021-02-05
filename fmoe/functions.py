@@ -40,7 +40,8 @@ def moe_prepare_forward(gate, num_expert, world_size, comm=None):
             )
         else:
             global_expert_count = local_expert_count
-        fwd_expert_count = global_expert_count.view(world_size, num_expert).sum(dim=0)
+        fwd_expert_count = global_expert_count.view(world_size,
+                num_expert).sum(dim=0)
         fwd_batch_size = int(fwd_expert_count.sum().item())
     return (
         pos,
@@ -175,6 +176,9 @@ class MOEGather(Function):
 
 
 class AllGather(Function):
+    r'''
+    A wrapper for the All-Gather function to support auto-differentiation.
+    '''
     @staticmethod
     def forward(ctx, inp, rank, world_size, group):
         tensor_list = [torch.empty_like(inp) for _ in range(world_size)]
