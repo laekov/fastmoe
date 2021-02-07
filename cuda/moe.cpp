@@ -116,7 +116,11 @@ class HackNCCLGroup: public c10d::ProcessGroupNCCL {
 public:
 	ncclComm_t getcomm(at::Device dev) {
 		auto key = std::to_string(dev.index());
+#ifdef ENABLE_NCCL_P2P_SUPPORT
 		auto v = getNCCLComm(key, {dev}, c10d::OpType::ALLTOALL);
+#else
+		auto v = getNCCLComm(key, {dev});
+#endif
 		if (v.size() == 0) {
 			std::cerr << "PyTorch has nothing\n";
 			return 0;

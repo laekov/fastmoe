@@ -20,8 +20,12 @@ fi
 
 mkdir -p logs
 
-SCRIPT_PATH=$(dirname $(dirname $(realpath $0)))
-export PYTHONPATH=$SCRIPT_PATH:$SCRIPT_PATH/build/lib.linux-x86_64-3.7:$PYTHONPATH
-export LD_LIBRARY_PATH=/home/laekov/.local/lib/python3.7/site-packages/torch/lib:$LD_LIBRARY_PATH
+PYTHON_EXEC=python3
+PYTHON_VERSION=$($PYTHON_EXEC --version)
+PYTHON_REVISION=${PYTHON_VERSION:7:3}
 
-exec python3 $@ 2>logs/$RANK.log
+SCRIPT_PATH=$(dirname $(dirname $(realpath $0)))
+export PYTHONPATH=$SCRIPT_PATH:$SCRIPT_PATH/build/lib.linux-x86_64-$PYTHON_REVISION:$PYTHONPATH
+export LD_LIBRARY_PATH=/home/laekov/.local/lib/python$PYTHON_REVISION/site-packages/torch/lib:$LD_LIBRARY_PATH
+
+exec $PYTHON_EXEC $@ 2>logs/$RANK.log
