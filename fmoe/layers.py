@@ -3,11 +3,11 @@ Layers that FMoE provides to users
 '''
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .functions import moe_prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
 from .functions import AllGather
+from .gates import NaiveGate
 
 
 class FMoELinear(nn.Module):
@@ -39,38 +39,6 @@ class FMoELinear(nn.Module):
         Call MOE function
         '''
         return MOELinear.apply(inp, self.weight, fwd_expert_count)
-
-
-class FMoENaiveGate(nn.Module):
-    r'''
-    A naive gate implementation that defines the standard behavior of the gate
-    which determines which experts the tokens are going to.
-    Both the indecies and the score, or confidence, are output to the parent
-    module.
-    The load-balance strategies are also designed to be implemented within the
-    `Gate` module.
-    '''
-    def __init__(self, d_model, num_expert, world_size, top_k=2):
-        super().__init__()
-        self.gate = nn.Linear(d_model, num_expert * world_size)
-        self.top_k = top_k
-
-    def forward(self, inp):
-        r'''
-        The naive implementation simply calculates the top-k of a linear layer's
-        output.
-        '''
-        gate = self.gate(inp)
-        gate_top_k_val, gate_top_k_idx = torch.topk(
-            gate, k=self.top_k, dim=-1, largest=True, sorted=False
-        )  # [.. x top_k]
-        gate_top_k_val = gate_top_k_val.view(-1, self.top_k)
-
-        # (BxL) x 1 x top_k
-        gate_score = F.softmax(gate_top_k_val, dim=-1).unsqueeze(1)
-        gate_top_k_idx = gate_top_k_idx.view(-1)  # (BxLxtop_k)
-
-        return gate_top_k_idx, gate_score
 
 
 def _fmoe_full_forward(inp, gate, linears, activation, num_expert, world_size):
@@ -126,6 +94,7 @@ class FMoETransformerMLP(nn.Module):
         world_size=1,
         mp_group=None,
         activation=torch.nn.functional.gelu,
+        gate=NaiveGate,
         top_k=2,
         pre_lnorm=False
     ):
@@ -154,7 +123,7 @@ class FMoETransformerMLP(nn.Module):
             for p in self.h4toh.parameters():
                 setattr(p, 'dp_comm', 'none')
 
-        self.gate = FMoENaiveGate(d_model, num_expert, world_size, top_k)
+        self.gate = gate(d_model, num_expert, world_size, top_k)
         for p in self.gate.parameters():
             setattr(p, 'dp_comm', 'world')
 
