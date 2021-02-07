@@ -1,7 +1,7 @@
 r'''
 The adaptor to seamlessly enable FastMoE in Megatron-LM v2.0 with at most two
 lines of modification.
-See `exapmles/megatron` for usage instructions.
+See `examples/megatron` for usage instructions.
 '''
 import torch
 
