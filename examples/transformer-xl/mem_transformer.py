@@ -825,10 +825,13 @@ class CustomizedMoEPositionwiseFF(FMoETransformerMLP):
         super().__init__(num_expert=8, d_model=d_model, d_hidden=d_inner,
                 pre_lnorm=pre_lnorm, activation=activation)
         self.dropout = nn.Dropout(dropout)
+        self.bias = nn.Parameter(
+            torch.zeros(d_model, dtype=torch.float32)
+        )
 
     def forward(self, x):
-        x, bias = super().forward(x)
-        return x + bias
+        x = super().forward(x)
+        return x + self.bias
 
 
 class DecoderLayer(nn.Module):
