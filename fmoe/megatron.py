@@ -3,33 +3,35 @@ The adaptor to seamlessly enable FastMoE in Megatron-LM v2.0 with at most two
 lines of modification.
 See `exapmles/megatron` for usage instructions.
 '''
-from .layers import FMoETransformerMLP
+import torch
+
+from .transformer import FMoETransformerMLP
 from .distributed import DistributedGroupedDataParallel
 from .utils import get_torch_default_comm
 
 
-def _create_moe_mlp(args, group):
+class MegatronMLP(FMoETransformerMLP):
     r'''
     Make the FMoETransformerMLP layer that distributes experts across
     communication group `group` to replace the original MLP layer in Megatron.
     '''
-    assert (args.seq_length * args.micro_batch_size
-            % args.tensor_model_parallel_size == 0
-    ), "Batch size x sequence length should be multiple of mp size"
-    if not args.distributed_experts:
-        world_size = 1
-    else:
-        world_size = args.world_size
-    fmoe = FMoETransformerMLP(
-        args.num_experts,
-        d_model=args.hidden_size,
-        d_hidden=args.hidden_size * 4,
-        world_size=world_size,
-        mp_group=group
-    )
-    for p in fmoe.gate.parameters():
-        setattr(p, 'shared', True)
-    return fmoe
+    def __init__(self, args, group):
+        assert (args.seq_length * args.micro_batch_size
+                % args.tensor_model_parallel_size == 0
+        ), "Batch size x sequence length should be multiple of mp size"
+        if not args.distributed_experts:
+            world_size = 1
+        else:
+            world_size = args.world_size
+        super().__init__(args.num_experts,
+                d_model=args.hidden_size, d_hidden=args.hidden_size * 4,
+                world_size=world_size, mp_group=group)
+        self.bias = torch.nn.parameter.Parameter(
+            torch.zeros(args.hidden_size, dtype=torch.float32)
+        )
+
+    def forward(self, inp):
+        return super().forward(inp), self.bias
 
 
 def fmoefy(model, num_experts=None, distributed_experts=True):
@@ -60,7 +62,7 @@ def fmoefy(model, num_experts=None, distributed_experts=True):
         args.distributed_experts = distributed_experts
 
     for l in model.language_model.transformer.layers:
-        l.mlp = _create_moe_mlp(args, get_torch_default_comm())
+        l.mlp = MegatronMLP(args, get_torch_default_comm())
     return model
 
 
