@@ -1,7 +1,5 @@
-import json
-import os
 import sys
-from typing import List, Callable, Dict, Type, Union
+from typing import List, Type, Union
 
 import pytest
 import torch
@@ -13,10 +11,24 @@ from fmoe.transformer import _Expert
 from moe import BruteForceMoELinear, BruteForceMoE, NaiveExpert, LinearExpert
 
 
-def _perform_forward(moe: nn.Module, moe_raw: nn.Module, batch_size, d_model, top_k):
+def _perform_forward(
+    moe: nn.Module, moe_raw: nn.Module, batch_size, d_model, top_k, rank, mp_group
+):
     moe.zero_grad()
     moe_raw.zero_grad()
-    inp = torch.rand(batch_size, d_model).cuda()
+    if not mp_group:
+        inp = torch.rand(batch_size, d_model).cuda()
+    else:
+        group_sender = rank // mp_group.size() * mp_group.size()
+        inp = torch.rand(batch_size, d_model).cuda()
+        torch.distributed.broadcast(inp, group_sender, group=mp_group)
+        torch.distributed.broadcast(
+            moe.gate.gate.weight.data, group_sender, group=mp_group
+        )
+        torch.distributed.broadcast(
+            moe.gate.gate.bias.data, group_sender, group=mp_group
+        )
+
     gate_idx, gate_score = moe.gate(inp)
     inp_repeated = inp.repeat_interleave(repeats=top_k, dim=0)
     moe_out = moe(inp).mean()
@@ -47,6 +59,7 @@ def _assert_numercial(names, moe_out_list, raw_out_list, rank):
 @pytest.mark.parametrize("d_hidden", [32])
 @pytest.mark.parametrize("rank", [0])
 @pytest.mark.parametrize("world_size", [1])
+@pytest.mark.parametrize("mp_group", [None])
 def test_fmoe_linear(
     num_expert,
     top_k,
@@ -55,6 +68,7 @@ def test_fmoe_linear(
     d_hidden,
     rank,
     world_size,
+    mp_group,
     activation=torch.nn.functional.gelu,
 ):
     torch.manual_seed(42 + rank)
@@ -70,7 +84,7 @@ def test_fmoe_linear(
         d_model=d_model,
         gate=NaiveGate,
         world_size=world_size,
-        mp_group=None,
+        mp_group=mp_group,
         expert_fn=expert_fn,
         top_k=top_k,
     ).cuda()
@@ -100,7 +114,9 @@ def test_fmoe_linear(
         torch.distributed.all_gather(weight_h4toh_array, experts.h4toh.weight.data)
         moe_raw.weight_h4toh.data = torch.cat(weight_h4toh_array, dim=0)
 
-    moe_out, raw_out = _perform_forward(moe, moe_raw, batch_size, d_model, top_k)
+    moe_out, raw_out = _perform_forward(
+        moe, moe_raw, batch_size, d_model, top_k, rank, mp_group
+    )
 
     moe_out_list = moe_out, experts.htoh4.weight.grad, experts.h4toh.weight.grad
     raw_out_list = raw_out, moe_raw.weight_htoh4.grad, moe_raw.weight_h4toh.grad
@@ -109,8 +125,9 @@ def test_fmoe_linear(
         _, htoh4_grad, h4toh_grad = raw_out_list
         torch.distributed.all_reduce(htoh4_grad)
         torch.distributed.all_reduce(h4toh_grad)
-        htoh4_grad = htoh4_grad[rank * num_expert : (rank + 1) * num_expert]
-        h4toh_grad = h4toh_grad[rank * num_expert : (rank + 1) * num_expert]
+        mp_size = mp_group.size() if mp_group else 1
+        htoh4_grad = htoh4_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
+        h4toh_grad = h4toh_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
         raw_out_list = _, htoh4_grad, h4toh_grad
 
     names = ["output", "htoh4 weight grad", "h4toh weight grad"]
@@ -121,9 +138,10 @@ def test_fmoe_linear(
 @pytest.mark.parametrize("num_expert", [4, 8])
 @pytest.mark.parametrize("d_model", [16])
 @pytest.mark.parametrize("top_k", [2, 3])
-@pytest.mark.parametrize("expert", ["NaiveExpert", "LinearExpert"])
+@pytest.mark.parametrize("expert", [NaiveExpert, LinearExpert])
 @pytest.mark.parametrize("rank", [0])
 @pytest.mark.parametrize("world_size", [1])
+@pytest.mark.parametrize("mp_group", [None])
 def test_fmoe(
     batch_size,
     num_expert,
@@ -131,6 +149,7 @@ def test_fmoe(
     top_k,
     expert: Union[Type[nn.Module], str],
     rank,
+    mp_group,
     world_size,
 ):
     torch.manual_seed(42 + rank)
@@ -144,7 +163,7 @@ def test_fmoe(
         d_model=d_model,
         gate=NaiveGate,
         world_size=world_size,
-        mp_group=None,
+        mp_group=mp_group,
         expert=expert,
         top_k=top_k,
     ).cuda()
@@ -178,7 +197,9 @@ def test_fmoe(
                     idx
                 ].data = para_tensor_gathered[expertID]
 
-    moe_out, raw_out = _perform_forward(moe, moe_raw, batch_size, d_model, top_k)
+    moe_out, raw_out = _perform_forward(
+        moe, moe_raw, batch_size, d_model, top_k, rank, mp_group
+    )
 
     def get_experts_grad(experts: List[nn.Module]):
         return torch.stack(
@@ -200,7 +221,8 @@ def test_fmoe(
 
     if world_size > 1:
         torch.distributed.all_reduce(raw_grad)
-        raw_grad = raw_grad[rank * num_expert : (rank + 1) * num_expert]
+        mp_size = mp_group.size() if mp_group else 1
+        raw_grad = raw_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
 
     moe_out_list = [moe_out, moe_grad]
     raw_out_list = [raw_out, raw_grad]
@@ -218,6 +240,7 @@ if __name__ == "__main__":
         d_hidden=16,
         rank=0,
         world_size=1,
+        mp_group=None,
     )
     test_fmoe(
         batch_size=4,
@@ -227,4 +250,5 @@ if __name__ == "__main__":
         expert=NaiveExpert,
         rank=0,
         world_size=1,
+        mp_group=None,
     )
