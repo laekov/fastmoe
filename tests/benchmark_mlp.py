@@ -20,9 +20,8 @@ class BruteForceMoE(nn.Module):
             gate=NaiveGate, top_k=1, pre_lnorm=False):
         assert world_size == 1, 'Distributed brute force is not supported'
         super().__init__()
-        self.mlp1 = BruteForceMoELinear(num_expert, d_model, d_hidden, 1)
-        self.mlp2 = BruteForceMoELinear(num_expert, d_hidden, d_model, 1)
-        self.activation = activation
+        self.mlp = BruteForceMoELinear(activation, num_expert, d_model,
+                d_hidden, 1, top_k)
         self.top_k = top_k
         self.gate = gate(d_model, num_expert, world_size, top_k)
         self.pre_lnorm = pre_lnorm
@@ -34,11 +33,7 @@ class BruteForceMoE(nn.Module):
             inp = self.layer_norm(inp)
         gate_top_k_idx, gate_score = self.gate(inp)
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
-        x = self.mlp1(inp, gate_top_k_idx)
-        x = self.activation(x)
-        x = self.mlp2(x, gate_top_k_idx)
-        x = x.view(-1, self.top_k, self.d_model)
-        x = torch.bmm(gate_score, x).reshape(-1, self.d_model)
+        x = self.mlp(inp, gate_top_k_idx, gate_score)
         if not self.pre_lnorm:
             x = self.layer_norm(x)
         return x
@@ -47,7 +42,6 @@ class BruteForceMoE(nn.Module):
 def benchmark_mlp(MOELayer, batch_size, in_feat, hidden_feat, num_expert, top_k):
     torch.manual_seed(42 + rank)
     torch.cuda.manual_seed(42 + rank)
-    
     if rank == 0:
         print('Performance test of {} mm size {} {}x{} experts {}x{} topk {}'
                 .format(MOELayer.__name__, batch_size, in_feat, hidden_feat,
@@ -108,11 +102,10 @@ if __name__ == '__main__':
     else:
         rank = 0
         world_size = 1
-   
     batch_size = int(os.environ.get('BATCH_SIZE', '4096'))
     d_model = int(os.environ.get('D_MODEL', '1024'))
     d_hidden = int(os.environ.get('D_HIDDEN', '4096'))
-    num_expert = int(os.environ.get('NUM_EXPERT', '8'))
+    num_expert = int(os.environ.get('NUM_EXPERT', '64'))
     top_k = int(os.environ.get('TOP_K', '2'))
     benchmark_mlp(FMoETransformerMLP, batch_size, d_model,
                     d_hidden, num_expert, top_k)

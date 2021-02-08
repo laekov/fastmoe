@@ -40,7 +40,7 @@ class BruteForceMoELinear(nn.Module):
         x = torch.bmm(gate_score, o.view(-1, self.top_k, 
             self.d_model)).reshape(-1, self.d_model)
         return x
-        
+
 
 class BruteForceMoE(nn.Module):
     def __init__(self, expert, num_expert=32, d_model=1024, world_size=1, top_k=2):
