@@ -28,14 +28,17 @@ class BruteForceMoELinear(nn.Module):
     def forward(self, inp, gate_idx, gate_score):
         gate_long = gate_idx.long()
         batch_size = inp.size(0)
-        x = inp.new_zeros((batch_size, self.d_model))
-        for i in range(batch_size):
-            t = inp[i] @ self.weight_htoh4[gate_long[i]].t()
-            t = self.activation(t)
-            x[i] = t @ self.weight_h4toh[gate_long[i]].t()
-        x = torch.bmm(gate_score, x.view(-1, self.top_k, self.d_model)).reshape(
-            -1, self.d_model
-        )
+        o = torch.empty(batch_size, self.d_model, dtype=inp.dtype,
+                device=inp.device)
+        for i in range(self.weight_htoh4.shape[0]):
+            idx = (gate_idx == i)
+            x = inp[idx]
+            x = x @ self.weight_htoh4[i].t()
+            x = self.activation(x)
+            x = x @ self.weight_h4toh[i].t()
+            o[idx] = x
+        x = torch.bmm(gate_score, o.view(-1, self.top_k, 
+            self.d_model)).reshape(-1, self.d_model)
         return x
 
 
