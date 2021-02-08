@@ -1,33 +1,47 @@
-from moe import FMoE as MOELayer 
-from moe import BruteForceMoE as MOELayer_raw
-import torch
-from torch import nn
-import sys
 import os
 
+import pytest
+import torch
 
-n_devices = int(os.environ.get('N_GPUS', '2'))
+from fmoe.gates import NaiveGate
+from fmoe.layers import FMoE
+from fmoe.transformer import _Expert
+
+n_devices = int(os.environ.get("N_GPUS", "2"))
 
 
-def test_dp():
+@pytest.mark.parametrize("num_expert", [4, 8])
+@pytest.mark.parametrize("top_k", [2, 3])
+@pytest.mark.parametrize("batch_size", [4])
+@pytest.mark.parametrize("d_model", [16])
+@pytest.mark.parametrize("d_hidden", [32])
+def test_fmoe_dp(
+    num_expert,
+    top_k,
+    batch_size,
+    d_model,
+    d_hidden,
+    activation=torch.nn.functional.gelu,
+):
     torch.manual_seed(42)
     torch.cuda.manual_seed(42)
-    batch_size = 6
-    num_expert = 4
-    in_feat = 2
-    out_feat = 3
 
-    inp = torch.rand(batch_size, in_feat).cuda()
-    gate = torch.randint(low=0, high=num_expert, size=(batch_size, ), 
-            requires_grad=False).cuda()
+    experts = _Expert(num_expert, d_model, d_hidden, activation).cuda()
 
-    print("data parallel of our MoE model")
-    moe = MOELayer(num_expert, in_feat, out_feat).cuda()
+    def expert_fn(inp, gate):
+        return experts(inp, gate)
+
+    moe = FMoE(
+        num_expert=num_expert,
+        d_model=d_model,
+        gate=NaiveGate,
+        world_size=1,
+        mp_group=None,
+        expert_fn=expert_fn,
+        top_k=top_k,
+    ).cuda()
+
     moe_dp = torch.nn.DataParallel(moe, device_ids=list(range(n_devices)))
+
     for i in range(5):
-        output = moe_dp(inp, gate)
-    print('Successful')
-
-
-if __name__ == '__main__':
-    test_dp()
+        output = moe_dp(torch.rand(batch_size, d_model).cuda())
