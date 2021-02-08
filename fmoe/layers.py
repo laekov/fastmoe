@@ -77,7 +77,6 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
     return x
 
 
-
 class FMoE(nn.Module):
     r'''
     A general moe implementation that supports an arbitrary module as the expert

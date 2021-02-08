@@ -50,7 +50,8 @@ class FMoETransformerMLP(FMoE):
         def expert_fn(inp, gate):
             return self.experts(inp, gate)
         super().__init__(num_expert=num_expert, d_model=d_model, gate=gate,
-                world_size=world_size, mp_group=mp_group, expert_fn=expert_fn)
+                top_k=top_k, world_size=world_size, mp_group=mp_group,
+                expert_fn=expert_fn)
         self.experts = _Expert(num_expert, d_model, d_hidden, activation)
         self.pre_lnorm = pre_lnorm
         self.layer_norm = nn.LayerNorm(d_model)
