@@ -115,7 +115,7 @@ class FMoE(nn.Module):
         if expert_fn is None:
             assert expert is not None, 'Either expert or expert_fn should be set'
             self.experts = [expert(d_model) for _ in range(num_expert)]
-            def expert_fn(self, inp, fwd_expert_count):
+            def expert_fn(inp, fwd_expert_count):
                 outputs = []
                 base_idx = 0
                 for i in range(self.num_expert):
