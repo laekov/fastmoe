@@ -44,7 +44,7 @@ def _assert_numercial(names, moe_out_list, raw_out_list):
 
 
 @pytest.mark.parametrize("num_expert", [4, 8])
-@pytest.mark.parametrize("top_k", [2])
+@pytest.mark.parametrize("top_k", [2, 3])
 @pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("d_model", [16])
 @pytest.mark.parametrize("d_hidden", [32])
@@ -80,6 +80,7 @@ def test_fmoe_linear(
         d_model=d_model,
         d_hidden=d_hidden,
         world_size=world_size,
+        top_k=top_k,
     ).cuda()
 
     if world_size == 1:
@@ -118,7 +119,7 @@ def test_fmoe_linear(
 @pytest.mark.parametrize("batch_size", [4])
 @pytest.mark.parametrize("num_expert", [4, 8])
 @pytest.mark.parametrize("d_model", [16])
-@pytest.mark.parametrize("top_k", [2])
+@pytest.mark.parametrize("top_k", [2, 3])
 @pytest.mark.parametrize("expert", ["NaiveExpert", "LinearExpert"])
 def test_fmoe(
     batch_size, num_expert, d_model, top_k, expert: Union[Type[nn.Module], str]
@@ -140,7 +141,11 @@ def test_fmoe(
     ).cuda()
 
     moe_raw = BruteForceMoE(
-        expert=expert, num_expert=num_expert, d_model=d_model, world_size=world_size,
+        expert=expert,
+        num_expert=num_expert,
+        d_model=d_model,
+        world_size=world_size,
+        top_k=top_k,
     ).cuda()
 
     if world_size == 1:
