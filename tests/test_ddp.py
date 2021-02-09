@@ -11,6 +11,8 @@ from test_numerical import test_fmoe_linear as _test_fmoe_linear
 
 
 def _run_distributed(func, world_size, args: Dict):
+    if torch.cuda.device_count() < world_size:
+        pytest.skip("No enough GPU")
     import subprocess
     import os
 
