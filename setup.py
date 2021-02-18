@@ -2,6 +2,7 @@ import setuptools
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
 
+
 CUDA_HELPER = os.environ.get('CUDA_HELPER', '/usr/local/cuda/samples/common/inc')
 cxx_flags = [
         '-I{}'.format(CUDA_HELPER)
@@ -9,9 +10,16 @@ cxx_flags = [
 if os.environ.get('USE_NCCL', '0') == '1':
     cxx_flags.append('-DMOE_USE_NCCL')
 
+
 if __name__ == '__main__':
     setuptools.setup(
         name='fmoe',
+        version='0.1.0',
+        description='An efficient Mixture-of-Experts impl. for PyTorch',
+        author='Jiaao He, Jiezhong Qiu and Aohan Zeng',
+        author_email='hja20@mails.tsinghua.edu.cn',
+        license='Apache-2',
+        url='https://github.com/laekov/fastmoe',
         packages=['fmoe'],
         ext_modules=[
             CUDAExtension(
@@ -29,7 +37,6 @@ if __name__ == '__main__':
                     }
                 )
             ],
-        version='0.0.2',
         cmdclass={
             'build_ext': BuildExtension
         })
