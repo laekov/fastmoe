@@ -1,10 +1,10 @@
 r'''
 Layers that FMoE provides to users
 '''
+import math
 import torch
 import torch.nn as nn
 import numpy as np
-import math
 
 from .functions import moe_prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
@@ -34,17 +34,18 @@ class FMoELinear(nn.Module):
         '''
         rng = np.random.default_rng(np.random.randint(2048) + self.rank)
 
-        # copied from https://pytorch.org/docs/stable/nn.init.html#torch.nn.init.kaiming_uniform_
+        # copied from torch.nn.init.kaiming_uniform_
         fan = nn.init._calculate_correct_fan(self.weight[0], 'fan_in')
         gain = nn.init.calculate_gain('leaky_relu', math.sqrt(5))
         std = gain / math.sqrt(fan)
-        bound = math.sqrt(3.0) * std  # Calculate uniform bounds from standard deviation
-
+        bound = math.sqrt(3.0) * std
         device = self.weight.device
         dtype = self.weight.dtype
         for i in range(self.num_expert):
-            weight = rng.uniform(-bound, bound, size=tuple(self.weight[i].size()))
-            self.weight.data[i] = torch.tensor(weight, dtype=dtype, device=device)
+            weight = rng.uniform(-bound, bound,
+                    size=tuple(self.weight[i].size()))
+            self.weight.data[i] = torch.tensor(weight,
+                    dtype=dtype, device=device)
 
     def forward(self, inp, fwd_expert_count):
         r'''
