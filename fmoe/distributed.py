@@ -103,7 +103,7 @@ class DistributedGroupedDataParallel(nn.Module):
             synced = _unflatten_dense_tensors(coalesced, datas)
             for d, s in zip(datas, synced):
                 d.copy_(s)
-        
+
     def forward(self, *args, **kwargs):
         r'''
         Directly call the module's forward function.

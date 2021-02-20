@@ -1,8 +1,10 @@
 r'''
 Layers that FMoE provides to users
 '''
+import math
 import torch
 import torch.nn as nn
+import numpy as np
 
 from .functions import moe_prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
@@ -17,11 +19,12 @@ class FMoELinear(nn.Module):
     performed in parallel to increase the performance.
     The FMoELinear module provides such function.
     '''
-    def __init__(self, num_expert=32, in_feat=1024, out_feat=1024):
+    def __init__(self, num_expert=32, in_feat=1024, out_feat=1024, rank=0):
         super().__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
+        self.rank = rank
         self.weight = nn.Parameter(torch.Tensor(num_expert, out_feat, in_feat))
         self.reset_parameters()
 
@@ -29,10 +32,20 @@ class FMoELinear(nn.Module):
         r'''
         Initialize the weight as linear layers
         '''
+        rng = np.random.default_rng(np.random.randint(2048) + self.rank)
+
+        # copied from torch.nn.init.kaiming_uniform_
+        fan = nn.init._calculate_correct_fan(self.weight[0], 'fan_in')
+        gain = nn.init.calculate_gain('leaky_relu', math.sqrt(5))
+        std = gain / math.sqrt(fan)
+        bound = math.sqrt(3.0) * std
+        device = self.weight.device
+        dtype = self.weight.dtype
         for i in range(self.num_expert):
-            linear = nn.Linear(in_features=self.in_feat,
-                    out_features=self.out_feat)
-            self.weight.data[i] = linear.weight.data
+            weight = rng.uniform(-bound, bound,
+                    size=tuple(self.weight[i].size()))
+            self.weight.data[i] = torch.tensor(weight,
+                    dtype=dtype, device=device)
 
     def forward(self, inp, fwd_expert_count):
         r'''
