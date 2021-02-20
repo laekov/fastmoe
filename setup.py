@@ -10,7 +10,6 @@ cxx_flags = [
 ext_libs = []
 if os.environ.get('USE_NCCL', '0') == '1':
     cxx_flags.append('-DMOE_USE_NCCL')
-    ext_libs.append('nccl')
 
 
 if __name__ == '__main__':
