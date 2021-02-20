@@ -7,8 +7,10 @@ CUDA_HELPER = os.environ.get('CUDA_HELPER', '/usr/local/cuda/samples/common/inc'
 cxx_flags = [
         '-I{}'.format(CUDA_HELPER)
         ]
+ext_libs = []
 if os.environ.get('USE_NCCL', '0') == '1':
     cxx_flags.append('-DMOE_USE_NCCL')
+    ext_libs.append('nccl')
 
 
 if __name__ == '__main__':
@@ -34,7 +36,8 @@ if __name__ == '__main__':
                 extra_compile_args={
                     'cxx': cxx_flags,
                     'nvcc': cxx_flags
-                    }
+                    },
+                libraries=ext_libs
                 )
             ],
         cmdclass={
