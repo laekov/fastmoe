@@ -12,10 +12,10 @@ class _Expert(nn.Module):
     An expert using 2 FMoELinear modules to speed up the computation of experts
     within one worker.
     '''
-    def __init__(self, num_expert, d_model, d_hidden, activation):
+    def __init__(self, num_expert, d_model, d_hidden, activation, rank=0):
         super().__init__()
-        self.htoh4 = FMoELinear(num_expert, d_model, d_hidden)
-        self.h4toh = FMoELinear(num_expert, d_hidden, d_model)
+        self.htoh4 = FMoELinear(num_expert, d_model, d_hidden, rank)
+        self.h4toh = FMoELinear(num_expert, d_hidden, d_model, rank)
         self.activation = activation
 
     def forward(self, inp, fwd_expert_count):
@@ -52,7 +52,7 @@ class FMoETransformerMLP(FMoE):
         super().__init__(num_expert=num_expert, d_model=d_model, gate=gate,
                 top_k=top_k, world_size=world_size, mp_group=mp_group,
                 expert_fn=expert_fn)
-        self.experts = _Expert(num_expert, d_model, d_hidden, activation)
+        self.experts = _Expert(num_expert, d_model, d_hidden, activation, self.mp_rank)
         self.pre_lnorm = pre_lnorm
         self.layer_norm = nn.LayerNorm(d_model)
         self.mark_parallel_comm()
