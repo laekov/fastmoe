@@ -20,8 +20,14 @@ class BruteForceMoELinear(nn.Module):
         self.weight_htoh4 = nn.Parameter(
             torch.Tensor(num_expert * world_size, d_hidden, d_model)
         )
+        self.bias_htoh4 = nn.Parameter(
+            torch.Tensor(num_expert * world_size, d_hidden)
+        )
         self.weight_h4toh = nn.Parameter(
             torch.Tensor(num_expert * world_size, d_model, d_hidden)
+        )
+        self.bias_h4toh = nn.Parameter(
+            torch.Tensor(num_expert * world_size, d_model)
         )
         self.top_k = top_k
 
@@ -34,8 +40,10 @@ class BruteForceMoELinear(nn.Module):
             idx = (gate_idx == i)
             x = inp[idx]
             x = x @ self.weight_htoh4[i].t()
+            x = x + self.bias_htoh4[i]
             x = self.activation(x)
             x = x @ self.weight_h4toh[i].t()
+            x = x + self.bias_h4toh[i]
             o[idx] = x
         x = torch.bmm(gate_score, o.view(-1, self.top_k, 
             self.d_model)).reshape(-1, self.d_model)

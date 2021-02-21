@@ -19,13 +19,18 @@ class FMoELinear(nn.Module):
     performed in parallel to increase the performance.
     The FMoELinear module provides such function.
     '''
-    def __init__(self, num_expert=32, in_feat=1024, out_feat=1024, rank=0):
+    def __init__(self, num_expert: int, in_feat: int, out_feat: int,
+            bias: bool = True, rank: int = 0):
         super().__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
         self.out_feat = out_feat
         self.rank = rank
         self.weight = nn.Parameter(torch.Tensor(num_expert, out_feat, in_feat))
+        if bias:
+            self.bias = nn.Parameter(torch.Tensor(num_expert, out_feat))
+        else:
+            self.register_parameter('bias', None)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -41,17 +46,32 @@ class FMoELinear(nn.Module):
         bound = math.sqrt(3.0) * std
         device = self.weight.device
         dtype = self.weight.dtype
-        for i in range(self.num_expert):
-            weight = rng.uniform(-bound, bound,
-                    size=tuple(self.weight[i].size()))
-            self.weight.data[i] = torch.tensor(weight,
-                    dtype=dtype, device=device)
+        weight = rng.uniform(-bound, bound, size=tuple(self.weight.size()))
+        self.weight.data = torch.tensor(weight, dtype=dtype, device=device)
+
+        if self.bias is not None:
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[0])
+            bound = 1 / math.sqrt(fan_in)
+            bias = rng.uniform(-bound, bound, size=tuple(self.bias.size()))
+            self.bias.data = torch.tensor(bias, dtype=dtype, device=device)
 
     def forward(self, inp, fwd_expert_count):
         r'''
         Call MOE function
         '''
-        return MOELinear.apply(inp, self.weight, fwd_expert_count)
+        x = MOELinear.apply(inp, self.weight, fwd_expert_count)
+        if self.bias is not None:
+            bias = torch.repeat_interleave(self.bias,
+                    fwd_expert_count.to(self.bias.device), dim=0)
+            x = x + bias
+        return x
+
+    def extra_repr(self) -> str:
+        return 'num_expert={}, in_features={}, \
+                out_features={}, bias={}, rank={}'.format(
+                    self.num_expert, self.in_feat,
+                    self.out_feat, self.bias is not None, self.rank
+        )
 
 
 def mark_module_parallel_comm(module, comm):
@@ -92,8 +112,8 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
 
 class FMoE(nn.Module):
     r'''
-    A general moe implementation that supports an arbitrary module as the expert
-    Either `expert` or `expert_fn` is required.
+    A general moe implementation that supports an arbitrary module as the
+    expert.
     * `num_expert` stands for the number of experts on **each** worker.
     * `world_size` stands for the total number of workers that contains
     different experts.
@@ -106,12 +126,9 @@ class FMoE(nn.Module):
     * `gate` is a gate class which can found in `fmoe.gates`.
     * `expert` can be specified as a module class, it is used to generate
     `num_expert` expert modules.
-    * `expert_fn` is specified as a callable object or a function, it will be
-    called during forward, giving the input tensor (contiguous) and the array of
-    the number of input feature to each expert as input.
     '''
     def __init__(self, num_expert=32, d_model=1024, world_size=1, mp_group=None,
-            top_k=2, gate=NaiveGate, expert=None, expert_fn=None):
+            top_k=2, gate=NaiveGate, expert=None):
         super().__init__()
         self.num_expert = num_expert
         self.d_model = d_model
@@ -125,19 +142,20 @@ class FMoE(nn.Module):
             self.mp_rank = mp_group.rank()
         self.top_k = top_k
         self.gate = gate(d_model, num_expert, world_size, top_k)
-        if expert_fn is None:
-            assert expert is not None, 'Either expert or expert_fn should be set'
+        if expert is not None:
             self.experts = [expert(d_model) for _ in range(num_expert)]
-            def expert_fn(inp, fwd_expert_count):
-                outputs = []
-                base_idx = 0
-                for i in range(self.num_expert):
-                    batch_size = fwd_expert_count[i].item()
-                    inp_slice = inp[base_idx:base_idx + batch_size]
-                    outputs.append(self.experts[i](inp_slice))
-                    base_idx += batch_size
-                return torch.cat(outputs, dim=0)
-        self.expert_fn = expert_fn
+
+    def expert_fn(self, inp, fwd_expert_count):
+        if isinstance(self.experts, nn.Module):
+            return self.experts(inp, fwd_expert_count)
+        outputs = []
+        base_idx = 0
+        for i in range(self.num_expert):
+            batch_size = fwd_expert_count[i].item()
+            inp_slice = inp[base_idx:base_idx + batch_size]
+            outputs.append(self.experts[i](inp_slice))
+            base_idx += batch_size
+        return torch.cat(outputs, dim=0)
 
     def mark_parallel_comm(self):
         r'''

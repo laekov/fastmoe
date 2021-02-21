@@ -14,8 +14,10 @@ class _Expert(nn.Module):
     '''
     def __init__(self, num_expert, d_model, d_hidden, activation, rank=0):
         super().__init__()
-        self.htoh4 = FMoELinear(num_expert, d_model, d_hidden, rank)
-        self.h4toh = FMoELinear(num_expert, d_hidden, d_model, rank)
+        self.htoh4 = FMoELinear(num_expert, d_model, d_hidden,
+                bias=True, rank=rank)
+        self.h4toh = FMoELinear(num_expert, d_hidden, d_model,
+                bias=True, rank=rank)
         self.activation = activation
 
     def forward(self, inp, fwd_expert_count):
@@ -47,11 +49,8 @@ class FMoETransformerMLP(FMoE):
         top_k=2,
         pre_lnorm=False
     ):
-        def expert_fn(inp, gate):
-            return self.experts(inp, gate)
         super().__init__(num_expert=num_expert, d_model=d_model, gate=gate,
-                top_k=top_k, world_size=world_size, mp_group=mp_group,
-                expert_fn=expert_fn)
+                top_k=top_k, world_size=world_size, mp_group=mp_group)
         self.experts = _Expert(num_expert, d_model, d_hidden, activation,
                 rank=self.mp_rank)
         self.pre_lnorm = pre_lnorm
