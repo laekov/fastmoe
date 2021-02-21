@@ -22,8 +22,16 @@ Fast MoE contains a set of PyTorch customized opearators, including both C and
 Python components. Use `python setup.py install` to easily install and enjoy
 using Fast MoE for training.
 
-The distributed expert feature is enabled by default. If you want to disable
-it, pass environment variable `USE_NCCL=0` to the setup script.
+The distributed expert feature is disabled by default. If you want to disable
+it, pass environment variable `USE_NCCL=1` to the setup script.
+
+Note that an extra NCCL developer package is needed, which has to be consistant
+with your PyTorch's NCCL version, which can be inspected by running
+`torch.cuda.nccl.version()`. The [official PyTorch docker image]() is
+recommended, as the environment is well-setup there. Otherwise, you can access
+the [download link of all NCCL
+versions](https://developer.nvidia.com/nccl/nccl-legacy-downloads) to download
+the NCCL package that is suitable for you.
 
 ## Usage 
 
