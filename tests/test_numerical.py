@@ -52,6 +52,20 @@ def _assert_numercial(names, moe_out_list, raw_out_list, rank):
             assert False
 
 
+class MyMoE(FMoE):
+    def __init__(self, num_expert, d_model, d_hidden, world_size, mp_group,
+            top_k, activation):
+        super().__init__(
+            num_expert=num_expert,
+            d_model=d_model,
+            gate=NaiveGate,
+            world_size=world_size,
+            mp_group=mp_group,
+            top_k=top_k
+        )
+        self.experts = _Expert(num_expert, d_model, d_hidden, activation)
+
+
 @pytest.mark.parametrize("num_expert", [4, 8])
 @pytest.mark.parametrize("top_k", [2, 3])
 @pytest.mark.parametrize("batch_size", [4])
@@ -74,20 +88,8 @@ def test_fmoe_linear(
     torch.manual_seed(42 + rank)
     torch.cuda.manual_seed(42 + rank)
 
-    experts = _Expert(num_expert, d_model, d_hidden, activation).cuda()
-
-    def expert_fn(inp, gate):
-        return experts(inp, gate)
-
-    moe = FMoE(
-        num_expert=num_expert,
-        d_model=d_model,
-        gate=NaiveGate,
-        world_size=world_size,
-        mp_group=mp_group,
-        expert_fn=expert_fn,
-        top_k=top_k,
-    ).cuda()
+    moe = MyMoE(num_expert, d_model, d_hidden, world_size, mp_group, top_k,
+            activation).cuda()
 
     moe_raw = BruteForceMoELinear(
         activation=activation,
@@ -99,30 +101,30 @@ def test_fmoe_linear(
     ).cuda()
 
     if world_size == 1:
-        moe_raw.weight_htoh4.data = experts.htoh4.weight.data.clone()
-        moe_raw.bias_htoh4.data = experts.htoh4.bias.data.clone()
-        moe_raw.weight_h4toh.data = experts.h4toh.weight.data.clone()
-        moe_raw.bias_h4toh.data = experts.h4toh.bias.data.clone()
+        moe_raw.weight_htoh4.data = moe.experts.htoh4.weight.data.clone()
+        moe_raw.bias_htoh4.data = moe.experts.htoh4.bias.data.clone()
+        moe_raw.weight_h4toh.data = moe.experts.h4toh.weight.data.clone()
+        moe_raw.bias_h4toh.data = moe.experts.h4toh.bias.data.clone()
     else:
         weight_htoh4_array = [
-            torch.empty_like(experts.htoh4.weight.data) for _ in range(world_size)
+            torch.empty_like(moe.experts.htoh4.weight.data) for _ in range(world_size)
         ]
         bias_htoh4_array = [
-            torch.empty_like(experts.htoh4.bias.data) for _ in range(world_size)
+            torch.empty_like(moe.experts.htoh4.bias.data) for _ in range(world_size)
         ]
-        torch.distributed.all_gather(weight_htoh4_array, experts.htoh4.weight.data)
-        torch.distributed.all_gather(bias_htoh4_array, experts.htoh4.bias.data)
+        torch.distributed.all_gather(weight_htoh4_array, moe.experts.htoh4.weight.data)
+        torch.distributed.all_gather(bias_htoh4_array, moe.experts.htoh4.bias.data)
         moe_raw.weight_htoh4.data = torch.cat(weight_htoh4_array, dim=0)
         moe_raw.bias_htoh4.data = torch.cat(bias_htoh4_array, dim=0)
 
         weight_h4toh_array = [
-            torch.empty_like(experts.h4toh.weight.data) for _ in range(world_size)
+            torch.empty_like(moe.experts.h4toh.weight.data) for _ in range(world_size)
         ]
         bias_h4toh_array = [
-            torch.empty_like(experts.h4toh.bias.data) for _ in range(world_size)
+            torch.empty_like(moe.experts.h4toh.bias.data) for _ in range(world_size)
         ]
-        torch.distributed.all_gather(weight_h4toh_array, experts.h4toh.weight.data)
-        torch.distributed.all_gather(bias_h4toh_array, experts.h4toh.bias.data)
+        torch.distributed.all_gather(weight_h4toh_array, moe.experts.h4toh.weight.data)
+        torch.distributed.all_gather(bias_h4toh_array, moe.experts.h4toh.bias.data)
         moe_raw.weight_h4toh.data = torch.cat(weight_h4toh_array, dim=0)
         moe_raw.bias_h4toh.data = torch.cat(bias_h4toh_array, dim=0)
 
@@ -130,7 +132,7 @@ def test_fmoe_linear(
         moe, moe_raw, batch_size, d_model, top_k, rank, mp_group
     )
 
-    moe_out_list = moe_out, experts.htoh4.weight.grad, experts.h4toh.weight.grad
+    moe_out_list = moe_out, moe.experts.htoh4.weight.grad, moe.experts.h4toh.weight.grad
     raw_out_list = raw_out, moe_raw.weight_htoh4.grad, moe_raw.weight_h4toh.grad
 
     if world_size > 1:
