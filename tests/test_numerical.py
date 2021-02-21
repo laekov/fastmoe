@@ -100,19 +100,31 @@ def test_fmoe_linear(
 
     if world_size == 1:
         moe_raw.weight_htoh4.data = experts.htoh4.weight.data.clone()
+        moe_raw.bias_htoh4.data = experts.htoh4.bias.data.clone()
         moe_raw.weight_h4toh.data = experts.h4toh.weight.data.clone()
+        moe_raw.bias_h4toh.data = experts.h4toh.bias.data.clone()
     else:
         weight_htoh4_array = [
             torch.empty_like(experts.htoh4.weight.data) for _ in range(world_size)
         ]
+        bias_htoh4_array = [
+            torch.empty_like(experts.htoh4.bias.data) for _ in range(world_size)
+        ]
         torch.distributed.all_gather(weight_htoh4_array, experts.htoh4.weight.data)
+        torch.distributed.all_gather(bias_htoh4_array, experts.htoh4.bias.data)
         moe_raw.weight_htoh4.data = torch.cat(weight_htoh4_array, dim=0)
+        moe_raw.bias_htoh4.data = torch.cat(bias_htoh4_array, dim=0)
 
         weight_h4toh_array = [
             torch.empty_like(experts.h4toh.weight.data) for _ in range(world_size)
         ]
+        bias_h4toh_array = [
+            torch.empty_like(experts.h4toh.bias.data) for _ in range(world_size)
+        ]
         torch.distributed.all_gather(weight_h4toh_array, experts.h4toh.weight.data)
+        torch.distributed.all_gather(bias_h4toh_array, experts.h4toh.bias.data)
         moe_raw.weight_h4toh.data = torch.cat(weight_h4toh_array, dim=0)
+        moe_raw.bias_h4toh.data = torch.cat(bias_h4toh_array, dim=0)
 
     moe_out, raw_out = _perform_forward(
         moe, moe_raw, batch_size, d_model, top_k, rank, mp_group

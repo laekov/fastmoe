@@ -60,10 +60,18 @@ class FMoELinear(nn.Module):
         Call MOE function
         '''
         x = MOELinear.apply(inp, self.weight, fwd_expert_count)
-        if self.bias:
-            bias = torch.repeat_interleave(self.bias, fwd_expert_count, dim=0)
+        if self.bias is not None:
+            bias = torch.repeat_interleave(self.bias,
+                    fwd_expert_count.to(self.bias.device), dim=0)
             x = x + bias
         return x
+
+    def extra_repr(self) -> str:
+        return 'num_expert={}, in_features={}, \
+                out_features={}, bias={}, rank={}'.format(
+                    self.num_expert, self.in_feat,
+                    self.out_feat, self.bias is not None, self.rank
+        )
 
 
 def mark_module_parallel_comm(module, comm):
