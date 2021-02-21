@@ -191,8 +191,7 @@ class FMoE(nn.Module):
         gate_top_k_idx, gate_score = self.gate(inp)
         # to: (BxLxtop_k) x d_model
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
-        expert_fn = lambda inp, fec: self.expert_fn(inp, fec)
-        x = _fmoe_general_global_forward(inp, gate_top_k_idx, expert_fn,
+        x = _fmoe_general_global_forward(inp, gate_top_k_idx, self.expert_fn,
                 self.num_expert, self.world_size)
         # to: (BxL) x top_k x d_model
         x = x.view(-1, self.top_k, self.d_model)
