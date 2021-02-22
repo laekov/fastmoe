@@ -157,17 +157,14 @@ class FMoE(nn.Module):
             base_idx += batch_size
         return torch.cat(outputs, dim=0)
 
-    def mark_parallel_comm(self):
+    def mark_parallel_comm(self, expert_dp_comm='none'):
         r'''
         Automatically mark the data parallel comms of the parameters within the
         module. This can be typically called at the end of the __init__ function
         in child classes.
         '''
         if self.experts is not None:
-            if self.world_size > self.mp_size:
-                comm = 'none'
-            else:
-                comm = 'dp'
+            comm = expert_dp_comm
             if isinstance(self.experts, list):
                 for e in self.experts:
                     mark_module_parallel_comm(e, comm)

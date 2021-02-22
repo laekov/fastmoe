@@ -47,7 +47,8 @@ class FMoETransformerMLP(FMoE):
         activation=torch.nn.functional.gelu,
         gate=NaiveGate,
         top_k=2,
-        pre_lnorm=False
+        pre_lnorm=False,
+        expert_dp_comm='none'
     ):
         super().__init__(num_expert=num_expert, d_model=d_model, gate=gate,
                 top_k=top_k, world_size=world_size, mp_group=mp_group)
@@ -55,7 +56,7 @@ class FMoETransformerMLP(FMoE):
                 rank=self.mp_rank)
         self.pre_lnorm = pre_lnorm
         self.layer_norm = nn.LayerNorm(d_model)
-        self.mark_parallel_comm()
+        self.mark_parallel_comm(expert_dp_comm)
 
     def forward(self, inp: torch.Tensor):
         r'''

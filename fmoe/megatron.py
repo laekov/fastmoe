@@ -24,7 +24,7 @@ class MegatronMLP(FMoETransformerMLP):
         else:
             world_size = args.world_size
         super().__init__(args.num_experts,
-                d_model=args.hidden_size, d_hidden=args.hidden_size * 4,
+                d_model=args.hidden_size, d_hidden=args.hidden_hidden_size,
                 world_size=world_size, mp_group=group)
         self.bias = torch.nn.parameter.Parameter(
             torch.zeros(args.hidden_size, dtype=torch.float32)
@@ -34,7 +34,8 @@ class MegatronMLP(FMoETransformerMLP):
         return super().forward(inp), self.bias
 
 
-def fmoefy(model, num_experts=None, distributed_experts=True):
+def fmoefy(model, num_experts=None, distributed_experts=True,
+        hidden_hidden_size=None):
     r'''
     Replace MLP layers in a transformer-based model in Megatron by MoE.
     * `model` should be a standard Megatron model that has
@@ -56,6 +57,11 @@ def fmoefy(model, num_experts=None, distributed_experts=True):
     assert (
         'num_experts' in args
     ), 'num_experts should be specified in arguments or fmoefy function'
+
+    if hidden_hidden_size is not None:
+        args.hidden_hidden_size = hidden_hidden_size
+    elif not hasattr(args, 'hidden_hidden_size'):
+        args.hidden_hidden_size = args.hidden_size * 4
 
     # Set distributed_experts to None to use default setting in args
     if distributed_experts is not None:
