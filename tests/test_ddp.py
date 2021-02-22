@@ -8,6 +8,7 @@ import torch
 
 from test_numerical import test_fmoe as _test_fmoe
 from test_numerical import test_fmoe_linear as _test_fmoe_linear
+from test_numerical import _test_fmoe_local_ddp
 
 
 def _run_distributed(func, world_size, args: Dict):
@@ -78,6 +79,13 @@ def test_fmoe_distributed(num_expert, top_k, batch_size, d_model, expert, mp_siz
     )
 
 
+@pytest.mark.parametrize("mp_size", [1, 2])
+def test_fmoe_local_ddp(mp_size):
+    _run_distributed(
+        _test_fmoe_local_ddp.__name__, mp_size * 2, {"mp_size": mp_size},
+    )
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 3:
         args = json.loads(sys.argv[2])
@@ -87,20 +95,30 @@ if __name__ == "__main__":
         torch.distributed.init_process_group(backend="nccl")
         args["rank"] = torch.distributed.get_rank()
         args["world_size"] = torch.distributed.get_world_size()
-        args["mp_group"] = (
-            [
-                torch.distributed.new_group(
-                    ranks=[j * args["mp_size"] + i for i in range(args["mp_size"])],
-                    backend="nccl",
-                )
-                for j in range(args["world_size"] // args["mp_size"])
-            ][args["rank"] // args["mp_size"]]
-            if args["mp_size"] > 1
-            else None
+        args["mp_group"] = [
+            torch.distributed.new_group(
+                ranks=[j * args["mp_size"] + i for i in range(args["mp_size"])],
+                backend="nccl",
+            )
+            for j in range(args["world_size"] // args["mp_size"])
+        ][args["rank"] // args["mp_size"]]
+        args["dp_group"] = [
+            torch.distributed.new_group(
+                ranks=[
+                    i * args["mp_size"] + j
+                    for i in range(args["world_size"] // args["mp_size"])
+                ],
+                backend="nccl",
+            )
+            for j in range(args["mp_size"])
+        ][args["rank"] % args["mp_size"]]
+        args["world_group"] = torch.distributed.new_group(
+            ranks=list(range(args["world_size"])), backend="nccl",
         )
         del args["mp_size"]
         locals()[sys.argv[1]](**args)
     else:
+        test_fmoe_local_ddp(mp_size=2)
         test_fmoe_linear_distributed(
             num_expert=4, top_k=2, batch_size=4, d_model=8, d_hidden=8, mp_size=2
         )

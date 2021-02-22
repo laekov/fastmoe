@@ -1,13 +1,16 @@
 import sys
+from collections import OrderedDict
 from typing import List, Type, Union
 
 import pytest
 import torch
 import torch.nn as nn
 
+from copy import deepcopy
 from fmoe.gates import NaiveGate
 from fmoe.layers import FMoE
 from fmoe.transformer import _Expert
+from fmoe.distributed import DistributedGroupedDataParallel as LocalDDP
 from moe import BruteForceMoELinear, BruteForceMoE, NaiveExpert, LinearExpert
 
 
@@ -53,15 +56,16 @@ def _assert_numercial(names, moe_out_list, raw_out_list, rank):
 
 
 class MyMoE(FMoE):
-    def __init__(self, num_expert, d_model, d_hidden, world_size, mp_group,
-            top_k, activation):
+    def __init__(
+        self, num_expert, d_model, d_hidden, world_size, mp_group, top_k, activation
+    ):
         super().__init__(
             num_expert=num_expert,
             d_model=d_model,
             gate=NaiveGate,
             world_size=world_size,
             mp_group=mp_group,
-            top_k=top_k
+            top_k=top_k,
         )
         self.experts = _Expert(num_expert, d_model, d_hidden, activation)
 
@@ -74,6 +78,8 @@ class MyMoE(FMoE):
 @pytest.mark.parametrize("rank", [0])
 @pytest.mark.parametrize("world_size", [1])
 @pytest.mark.parametrize("mp_group", [None])
+@pytest.mark.parametrize("dp_group", [None])
+@pytest.mark.parametrize("world_group", [None])
 def test_fmoe_linear(
     num_expert,
     top_k,
@@ -83,13 +89,16 @@ def test_fmoe_linear(
     rank,
     world_size,
     mp_group,
+    dp_group,
+    world_group,
     activation=torch.nn.functional.gelu,
 ):
     torch.manual_seed(42 + rank)
     torch.cuda.manual_seed(42 + rank)
 
-    moe = MyMoE(num_expert, d_model, d_hidden, world_size, mp_group, top_k,
-            activation).cuda()
+    moe = MyMoE(
+        num_expert, d_model, d_hidden, world_size, mp_group, top_k, activation
+    ).cuda()
 
     moe_raw = BruteForceMoELinear(
         activation=activation,
@@ -132,8 +141,20 @@ def test_fmoe_linear(
         moe, moe_raw, batch_size, d_model, top_k, rank, mp_group
     )
 
-    moe_out_list = moe_out, moe.experts.htoh4.weight.grad, moe.experts.h4toh.weight.grad, moe.experts.htoh4.bias.grad, moe.experts.h4toh.bias.grad
-    raw_out_list = raw_out, moe_raw.weight_htoh4.grad, moe_raw.weight_h4toh.grad, moe_raw.bias_htoh4.grad, moe_raw.bias_h4toh.grad
+    moe_out_list = (
+        moe_out,
+        moe.experts.htoh4.weight.grad,
+        moe.experts.h4toh.weight.grad,
+        moe.experts.htoh4.bias.grad,
+        moe.experts.h4toh.bias.grad,
+    )
+    raw_out_list = (
+        raw_out,
+        moe_raw.weight_htoh4.grad,
+        moe_raw.weight_h4toh.grad,
+        moe_raw.bias_htoh4.grad,
+        moe_raw.bias_h4toh.grad,
+    )
 
     if world_size > 1:
         _, htoh4_w_grad, h4toh_w_grad, htoh4_b_grad, h4toh_b_grad = raw_out_list
@@ -142,13 +163,27 @@ def test_fmoe_linear(
         torch.distributed.all_reduce(htoh4_b_grad)
         torch.distributed.all_reduce(h4toh_b_grad)
         mp_size = mp_group.size() if mp_group else 1
-        htoh4_w_grad = htoh4_w_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
-        h4toh_w_grad = h4toh_w_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
-        htoh4_b_grad = htoh4_b_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
-        h4toh_b_grad = h4toh_b_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
+        htoh4_w_grad = (
+            htoh4_w_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
+        )
+        h4toh_w_grad = (
+            h4toh_w_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
+        )
+        htoh4_b_grad = (
+            htoh4_b_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
+        )
+        h4toh_b_grad = (
+            h4toh_b_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
+        )
         raw_out_list = _, htoh4_w_grad, h4toh_w_grad, htoh4_b_grad, h4toh_b_grad
 
-    names = ["output", "htoh4 weight grad", "h4toh weight grad", "htoh4 bias grad", "h4toh bias grad"]
+    names = [
+        "output",
+        "htoh4 weight grad",
+        "h4toh weight grad",
+        "htoh4 bias grad",
+        "h4toh bias grad",
+    ]
     _assert_numercial(names, moe_out_list, raw_out_list, rank)
 
 
@@ -160,6 +195,8 @@ def test_fmoe_linear(
 @pytest.mark.parametrize("rank", [0])
 @pytest.mark.parametrize("world_size", [1])
 @pytest.mark.parametrize("mp_group", [None])
+@pytest.mark.parametrize("dp_group", [None])
+@pytest.mark.parametrize("world_group", [None])
 def test_fmoe(
     batch_size,
     num_expert,
@@ -167,8 +204,10 @@ def test_fmoe(
     top_k,
     expert: Union[Type[nn.Module], str],
     rank,
-    mp_group,
     world_size,
+    mp_group,
+    dp_group,
+    world_group,
 ):
     torch.manual_seed(42 + rank)
     torch.cuda.manual_seed(42 + rank)
@@ -249,6 +288,82 @@ def test_fmoe(
     _assert_numercial(names, moe_out_list, raw_out_list, rank)
 
 
+class MyModule(nn.Module):
+    def __init__(self, dim=8):
+        super(MyModule, self).__init__()
+        self.model = nn.Sequential(
+            OrderedDict(
+                [
+                    ("linear1", nn.Linear(dim, dim)),
+                    ("relu1", nn.ReLU()),
+                    ("linear2", nn.Linear(dim, dim)),
+                    ("relu2", nn.ReLU()),
+                    ("linear3", nn.Linear(dim, dim)),
+                ]
+            )
+        )
+
+    def set_comm(self):
+        for p in self.model._modules["linear1"].parameters():
+            setattr(p, "dp_comm", "mp")
+        for p in self.model._modules["linear2"].parameters():
+            setattr(p, "dp_comm", "dp")
+        for p in self.model._modules["linear3"].parameters():
+            setattr(p, "dp_comm", "world")
+
+    def forward(self, inp):
+        return self.model(inp)
+
+
+def _test_fmoe_local_ddp(rank, world_size, mp_group, dp_group, world_group):
+    batch_size, dim = 4, 8
+
+    torch.manual_seed(42 + rank)
+    torch.cuda.manual_seed(42 + rank)
+
+    model = MyModule().cuda()
+    model_ddp = LocalDDP(deepcopy(model), mp_group, dp_group, world_group)
+    model.set_comm()
+    model_ddp.module.set_comm()
+
+    inp = torch.randn(batch_size, dim).cuda()
+
+    raw_out = model(inp).mean()
+    ddp_out = model_ddp(inp).mean()
+
+    raw_out.backward()
+    ddp_out.backward()
+
+    torch.distributed.all_reduce(
+        model.model._modules["linear1"].weight.grad.data, group=mp_group
+    )
+    model.model._modules["linear1"].weight.grad /= mp_group.size()
+    torch.distributed.all_reduce(
+        model.model._modules["linear2"].weight.grad.data, group=dp_group
+    )
+    model.model._modules["linear2"].weight.grad /= dp_group.size()
+    torch.distributed.all_reduce(
+        model.model._modules["linear3"].weight.grad.data, group=world_group
+    )
+    model.model._modules["linear3"].weight.grad /= world_group.size()
+    model_ddp.allreduce_params(reduce_after=False, fp32_allreduce=False)
+
+    raw_out_list = [
+        model.model._modules["linear1"].weight.grad,
+        model.model._modules["linear2"].weight.grad,
+        model.model._modules["linear3"].weight.grad,
+    ]
+    ddp_out_list = [
+        model_ddp.module.model._modules["linear1"].weight.grad,
+        model_ddp.module.model._modules["linear2"].weight.grad,
+        model_ddp.module.model._modules["linear3"].weight.grad,
+    ]
+
+    names = ["mp grad", "dp grad", "wp grad"]
+
+    _assert_numercial(names, ddp_out_list, raw_out_list, rank)
+
+
 if __name__ == "__main__":
     test_fmoe_linear(
         batch_size=4,
@@ -259,6 +374,8 @@ if __name__ == "__main__":
         rank=0,
         world_size=1,
         mp_group=None,
+        dp_group=None,
+        world_group=None,
     )
     test_fmoe(
         batch_size=4,
@@ -269,4 +386,6 @@ if __name__ == "__main__":
         rank=0,
         world_size=1,
         mp_group=None,
+        dp_group=None,
+        world_group=None,
     )
