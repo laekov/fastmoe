@@ -26,7 +26,8 @@ class MegatronMLP(FMoETransformerMLP):
         super().__init__(args.num_experts,
                 top_k=args.top_k,
                 d_model=args.hidden_size, d_hidden=args.hidden_hidden_size,
-                world_size=world_size, mp_group=group)
+                world_size=world_size, mp_group=group,
+                expert_dp_comm='none' if args.distributed_experts else 'dp')
         self.bias = torch.nn.parameter.Parameter(
             torch.zeros(args.hidden_size, dtype=torch.float32)
         )

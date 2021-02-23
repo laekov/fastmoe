@@ -47,7 +47,7 @@ class FMoELinear(nn.Module):
         device = self.weight.device
         dtype = self.weight.dtype
         weight = rng.uniform(-bound, bound, size=tuple(self.weight.size()))
-        self.weight.data = torch.tensor(weight, dtype=dtype, device=device)
+        self.weight.data = torch.Tensor(weight, dtype=dtype, device=device)
 
         if self.bias is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[0])
@@ -143,7 +143,7 @@ class FMoE(nn.Module):
         self.top_k = top_k
         self.gate = gate(d_model, num_expert, world_size, top_k)
         if expert is not None:
-            self.experts = nn.ModuleList([expert(d_model) 
+            self.experts = nn.ModuleList([expert(d_model)
                 for _ in range(num_expert)])
             self.experts_fused = False
         else:
