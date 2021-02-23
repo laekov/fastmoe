@@ -49,6 +49,7 @@ class FMoETransformerMLP(FMoE):
         top_k=2,
         do_lnorm=False,
         pre_lnorm=False,
+        add_residual=False,
         expert_dp_comm='none'
     ):
         super().__init__(num_expert=num_expert, d_model=d_model, gate=gate,
@@ -61,6 +62,7 @@ class FMoETransformerMLP(FMoE):
             self.pre_lnorm = pre_lnorm
         else:
             self.pre_lnorm = None
+        self.add_residual = add_residual
         self.mark_parallel_comm(expert_dp_comm)
 
     def forward(self, inp: torch.Tensor):
@@ -72,7 +74,9 @@ class FMoETransformerMLP(FMoE):
         inp = inp.reshape(-1, self.d_model)
         if self.pre_lnorm is not None and self.pre_lnorm:
             inp = self.layer_norm(inp)
-        output = super().forward(inp) + inp
+        output = super().forward(inp)
         if self.pre_lnorm is not None and not self.pre_lnorm:
             output = self.layer_norm(output)
+        if self.add_residual:
+            output += inp
         return output.reshape(original_shape)
