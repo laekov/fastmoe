@@ -47,7 +47,7 @@ class FMoELinear(nn.Module):
         device = self.weight.device
         dtype = self.weight.dtype
         weight = rng.uniform(-bound, bound, size=tuple(self.weight.size()))
-        self.weight.data = torch.Tensor(weight, dtype=dtype, device=device)
+        self.weight.data = torch.tensor(weight, dtype=dtype, device=device)
 
         if self.bias is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[0])
