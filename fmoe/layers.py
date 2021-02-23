@@ -143,10 +143,14 @@ class FMoE(nn.Module):
         self.top_k = top_k
         self.gate = gate(d_model, num_expert, world_size, top_k)
         if expert is not None:
-            self.experts = [expert(d_model) for _ in range(num_expert)]
+            self.experts = nn.ModuleList([expert(d_model) 
+                for _ in range(num_expert)])
+            self.experts_fused = False
+        else:
+            self.experts_fused = True
 
     def expert_fn(self, inp, fwd_expert_count):
-        if isinstance(self.experts, nn.Module):
+        if self.experts_fused:
             return self.experts(inp, fwd_expert_count)
         outputs = []
         base_idx = 0
