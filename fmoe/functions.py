@@ -192,3 +192,27 @@ class AllGather(Function):
     def backward(ctx, grad_out):
         rank, dim0 = ctx.args
         return grad_out[rank * dim0:(rank + 1) * dim0], None, None, None
+
+
+class Slice(Function):
+    r'''
+    A wrapper for the Slice function to support auto-differentiation.
+    '''
+    @staticmethod
+    def forward(ctx, inp, rank, world_size, group):
+        B: int = inp.shape[0]
+        local_batch_size = B // world_size
+        batch_start = local_batch_size * rank
+        batch_end = min(batch_start + local_batch_size, B)
+        inp = inp[batch_start:batch_end]
+        ctx.args = world_size, group
+        return inp
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        world_size, group = ctx.args
+        tensor_list = [torch.empty_like(grad_out) for _ in range(world_size)]
+        torch.distributed.all_gather(tensor_list, grad_out, group=group)
+        torch.cuda.synchronize()
+        grad_out = torch.cat(tensor_list, dim=0)
+        return grad_out, None, None, None

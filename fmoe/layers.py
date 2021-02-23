@@ -8,7 +8,7 @@ import numpy as np
 
 from .functions import moe_prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
-from .functions import AllGather
+from .functions import AllGather, Slice
 from .gates import NaiveGate
 
 
@@ -179,11 +179,8 @@ class FMoE(nn.Module):
         expert is multiplied to the experts' output tensors as a weight.
         '''
         if self.mp_size > 1:
-            B: int = inp.shape[0]
-            local_batch_size = B // self.mp_size
-            batch_start = local_batch_size * self.mp_rank
-            batch_end = min(batch_start + local_batch_size, B)
-            inp = inp[batch_start:batch_end]
+            inp = Slice.apply(inp,
+                    self.mp_rank, self.mp_size, self.mp_group)
 
         gate_top_k_idx, gate_score = self.gate(inp)
         # to: (BxLxtop_k) x d_model
