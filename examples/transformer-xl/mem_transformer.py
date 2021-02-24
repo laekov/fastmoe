@@ -821,11 +821,13 @@ class RelLearnableMultiHeadAttn(RelMultiHeadAttn):
 from fmoe import FMoETransformerMLP
 class CustomizedMoEPositionwiseFF(FMoETransformerMLP):
     def __init__(self, d_model, d_inner, dropout, pre_lnorm=False, moe_num_expert=64, moe_top_k=2):
-        def activation(x):
-            return self.dropout(F.relu(x))
+        activation = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.ReLU()
+        )
         super().__init__(num_expert=moe_num_expert, d_model=d_model, d_hidden=d_inner, top_k=moe_top_k,
-                do_lnorm=True, pre_lnorm=pre_lnorm, activation=activation)
-        self.dropout = nn.Dropout(dropout)
+                do_lnorm=True, pre_lnorm=pre_lnorm, activation=activation, dropout=dropout)
+        #self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         x = super().forward(x)
