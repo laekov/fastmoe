@@ -583,7 +583,8 @@ class MultiHeadAttn(nn.Module):
 
 class RelMultiHeadAttn(nn.Module):
     def __init__(self, n_head, d_model, d_head, dropout, dropatt=0,
-                 tgt_len=None, ext_len=None, mem_len=None, pre_lnorm=False):
+                 tgt_len=None, ext_len=None, mem_len=None, pre_lnorm=False,
+                 moe_num_expert=64, moe_top_k=2):
         super(RelMultiHeadAttn, self).__init__()
 
         self.n_head = n_head
@@ -819,10 +820,10 @@ class RelLearnableMultiHeadAttn(RelMultiHeadAttn):
 
 from fmoe import FMoETransformerMLP
 class CustomizedMoEPositionwiseFF(FMoETransformerMLP):
-    def __init__(self, d_model, d_inner, dropout, pre_lnorm=False):
+    def __init__(self, d_model, d_inner, dropout, pre_lnorm=False, moe_num_expert=64, moe_top_k=2):
         def activation(x):
             return self.dropout(F.relu(x))
-        super().__init__(num_expert=64, d_model=d_model, d_hidden=d_inner, topk=2,
+        super().__init__(num_expert=moe_num_expert, d_model=d_model, d_hidden=d_inner, top_k=moe_top_k,
                 pre_lnorm=pre_lnorm, activation=activation)
         self.dropout = nn.Dropout(dropout)
         self.bias = nn.Parameter(
@@ -841,7 +842,9 @@ class DecoderLayer(nn.Module):
         self.dec_attn = MultiHeadAttn(n_head, d_model, d_head, dropout, **kwargs)
         #  self.dec_attn = ExtendedMultiHeadAttn(n_head, d_model, d_head, dropout, **kwargs)
         self.pos_ff = CustomizedMoEPositionwiseFF(d_model, d_inner, dropout,
-                                     pre_lnorm=kwargs.get('pre_lnorm'))
+                                     pre_lnorm=kwargs.get('pre_lnorm'), 
+                                     moe_num_expert=kwargs.get('moe_num_expert'),
+                                     moe_top_k=kwargs.get('moe_top_k'))
 
     def forward(self, dec_inp, dec_attn_mask=None, mems=None):
 
@@ -861,7 +864,9 @@ class RelLearnableDecoderLayer(nn.Module):
         self.dec_attn = RelLearnableMultiHeadAttn(n_head, d_model, d_head, dropout,
                                          **kwargs)
         self.pos_ff = CustomizedMoEPositionwiseFF(d_model, d_inner, dropout,
-                                     pre_lnorm=kwargs.get('pre_lnorm'))
+                                     pre_lnorm=kwargs.get('pre_lnorm'),
+                                     moe_num_expert=kwargs.get('moe_num_expert'),
+                                     moe_top_k=kwargs.get('moe_top_k'))
 
     def forward(self, dec_inp, r_emb, r_w_bias, r_bias, dec_attn_mask=None, mems=None):
 
@@ -882,7 +887,9 @@ class RelPartialLearnableDecoderLayer(nn.Module):
         self.dec_attn = RelPartialLearnableMultiHeadAttn(n_head, d_model,
                             d_head, dropout, **kwargs)
         self.pos_ff = CustomizedMoEPositionwiseFF(d_model, d_inner, dropout,
-                                     pre_lnorm=kwargs.get('pre_lnorm'))
+                                     pre_lnorm=kwargs.get('pre_lnorm'),
+                                     moe_num_expert=kwargs.get('moe_num_expert'),
+                                     moe_top_k=kwargs.get('moe_top_k'))
 
     def forward(self, dec_inp, r, r_w_bias, r_r_bias, dec_attn_mask=None, mems=None):
 
@@ -967,7 +974,7 @@ class MemTransformerLM(nn.Module):
                  tgt_len=None, ext_len=None, mem_len=None,
                  cutoffs=[], adapt_inp=False,
                  same_length=False, attn_type=0, clamp_len=-1,
-                 sample_softmax=-1):
+                 sample_softmax=-1, moe_num_expert=64, moe_top_k=2):
         super(MemTransformerLM, self).__init__()
         self.n_token = n_token
 
@@ -998,7 +1005,8 @@ class MemTransformerLM(nn.Module):
                     RelPartialLearnableDecoderLayer(
                         n_head, d_model, d_head, d_inner, dropout,
                         tgt_len=tgt_len, ext_len=ext_len, mem_len=mem_len,
-                        dropatt=dropatt, pre_lnorm=pre_lnorm)
+                        dropatt=dropatt, pre_lnorm=pre_lnorm, 
+                        moe_num_expert=moe_num_expert, moe_top_k=moe_top_k)
                 )
         elif attn_type == 1: # learnable embeddings
             for i in range(n_layer):
@@ -1006,14 +1014,16 @@ class MemTransformerLM(nn.Module):
                     RelLearnableDecoderLayer(
                         n_head, d_model, d_head, d_inner, dropout,
                         tgt_len=tgt_len, ext_len=ext_len, mem_len=mem_len,
-                        dropatt=dropatt, pre_lnorm=pre_lnorm)
+                        dropatt=dropatt, pre_lnorm=pre_lnorm,
+                        moe_num_expert=moe_num_expert, moe_top_k=moe_top_k)
                 )
         elif attn_type in [2, 3]: # absolute embeddings
             for i in range(n_layer):
                 self.layers.append(
                     DecoderLayer(
                         n_head, d_model, d_head, d_inner, dropout,
-                        dropatt=dropatt, pre_lnorm=pre_lnorm)
+                        dropatt=dropatt, pre_lnorm=pre_lnorm,
+                        moe_num_expert=moe_num_expert, moe_top_k=moe_top_k)
                 )
 
         self.sample_softmax = sample_softmax

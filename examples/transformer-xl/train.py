@@ -167,8 +167,13 @@ parser.add_argument('--static-loss-scale', type=float, default=1,
 parser.add_argument('--dynamic-loss-scale', action='store_true',
                     help='Use dynamic loss scaling.  If supplied, this argument'
                     ' supersedes --static-loss-scale.')
+parser.add_argument('--moe-num-expert', type=int, default=64,
+                    help='number of experts in MoE')
+parser.add_argument('--moe-top_k', type=int, default=2,
+                    help='top_k experts in hard gate of moe')
 args = parser.parse_args()
 args.tied = not args.not_tied
+assert args.moe_num_expert >= args.moe_top_k, "must have moe-num-expert >= moe-top_k"
 
 if args.d_embed < 0:
     args.d_embed = args.d_model
@@ -305,7 +310,8 @@ else:
         tie_projs=tie_projs, pre_lnorm=args.pre_lnorm, tgt_len=args.tgt_len,
         ext_len=args.ext_len, mem_len=args.mem_len, cutoffs=cutoffs,
         same_length=args.same_length, attn_type=args.attn_type,
-        clamp_len=args.clamp_len, sample_softmax=args.sample_softmax)
+        clamp_len=args.clamp_len, sample_softmax=args.sample_softmax,
+        moe_num_expert=args.moe_num_expert, moe_top_k=args.moe_top_k)
     model.apply(weights_init)
     model.word_emb.apply(weights_init) # ensure embedding init is not overridden by out_layer in case of weight sharing
 args.n_all_param = sum([p.nelement() for p in model.parameters()])
@@ -571,7 +577,7 @@ def train():
             #  for i in range(len(avg_nnzs)):
             #      avg_nnzs[i].reset()
             #      act_hist[i] /= act_hist[i].sum()
-            #      prob, index = torch.topk(act_hist[i], min(1024, act_hist[i].size(-1)))
+            #      prob, index = torch.top_k(act_hist[i], min(1024, act_hist[i].size(-1)))
             #      log_str = '| layer {:2d} | top 64 prob {:3.2f} | top 128 prob {:3.2f} | top 256 prob {:3.2f} | top 512 prob {:3.2f} | top 1024 prob {:3.2f}'.format(
             #              i+1,
             #              prob[:64].sum().item(),
