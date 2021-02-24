@@ -1,10 +1,8 @@
 r'''
 Layers that FMoE provides to users
 '''
-import math
 import torch
 import torch.nn as nn
-import numpy as np
 
 from .functions import moe_prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
@@ -31,29 +29,6 @@ class FMoELinear(nn.Module):
             self.bias = nn.Parameter(torch.Tensor(num_expert, out_feat))
         else:
             self.register_parameter('bias', None)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        r'''
-        Initialize the weight as linear layers
-        '''
-        rng = np.random.default_rng(np.random.randint(2048) + self.rank)
-
-        # copied from torch.nn.init.kaiming_uniform_
-        fan = nn.init._calculate_correct_fan(self.weight[0], 'fan_in')
-        gain = nn.init.calculate_gain('leaky_relu', math.sqrt(5))
-        std = gain / math.sqrt(fan)
-        bound = math.sqrt(3.0) * std
-        device = self.weight.device
-        dtype = self.weight.dtype
-        weight = rng.uniform(-bound, bound, size=tuple(self.weight.size()))
-        self.weight.data = torch.tensor(weight, dtype=dtype, device=device)
-
-        if self.bias is not None:
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[0])
-            bound = 1 / math.sqrt(fan_in)
-            bias = rng.uniform(-bound, bound, size=tuple(self.bias.size()))
-            self.bias.data = torch.tensor(bias, dtype=dtype, device=device)
 
     def forward(self, inp, fwd_expert_count):
         r'''
