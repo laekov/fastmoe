@@ -380,8 +380,8 @@ from fmoe import FMoETransformerMLP
 class CustomizedMoEPositionwiseFF(FMoETransformerMLP):
     def __init__(self, d_model, d_inner, dropout, pre_lnorm=False, moe_num_expert=64, moe_top_k=2):
         activation = nn.Sequential(
-            nn.ReLU()
-            nn.Dropout(dropout),
+            nn.ReLU(),
+            nn.Dropout(dropout)
         )
         super().__init__(num_expert=moe_num_expert, d_model=d_model, d_hidden=d_inner, top_k=moe_top_k,
                 do_lnorm=True, pre_lnorm=pre_lnorm, activation=activation, dropout=dropout)
