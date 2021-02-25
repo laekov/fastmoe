@@ -141,9 +141,11 @@ parser.add_argument('--static-loss-scale', type=float, default=1,
 parser.add_argument('--dynamic-loss-scale', action='store_true',
                     help='Use dynamic loss scaling.  If supplied, this argument'
                     ' supersedes --static-loss-scale.')
+parser.add_argument('--moe', action='store_true',
+                    help='replace position-wise ffn with moe position-wise ffn')
 parser.add_argument('--moe-num-expert', type=int, default=64,
                     help='number of experts in MoE')
-parser.add_argument('--moe-top_k', type=int, default=2,
+parser.add_argument('--moe-top-k', type=int, default=2,
                     help='top_k experts in hard gate of moe')
 args = parser.parse_args()
 args.tied = not args.not_tied
@@ -285,7 +287,7 @@ else:
         ext_len=args.ext_len, mem_len=args.mem_len, cutoffs=cutoffs,
         same_length=args.same_length, attn_type=args.attn_type,
         clamp_len=args.clamp_len, sample_softmax=args.sample_softmax,
-        moe_num_expert=args.moe_num_expert, moe_top_k=args.moe_top_k)
+        moe=args.moe, moe_num_expert=args.moe_num_expert, moe_top_k=args.moe_top_k)
     model.apply(weights_init)
     model.word_emb.apply(weights_init) # ensure embedding init is not overridden by out_layer in case of weight sharing
 args.n_all_param = sum([p.nelement() for p in model.parameters()])
