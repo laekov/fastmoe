@@ -44,25 +44,15 @@ class FMoETransformerMLP(FMoE):
         d_hidden=4096,
         world_size=1,
         mp_group=None,
-        activation=torch.nn.functional.gelu,
+        activation=torch.nn.GELU(),
         gate=NaiveGate,
         top_k=2,
-        do_lnorm=False,
-        pre_lnorm=False,
         expert_dp_comm='none',
-        dropout=0.1
     ):
         super().__init__(num_expert=num_expert, d_model=d_model, gate=gate,
                 top_k=top_k, world_size=world_size, mp_group=mp_group)
-        self.dropout = nn.Dropout(dropout)
         self.experts = _Expert(num_expert, d_model, d_hidden, activation,
                 rank=self.mp_rank)
-        self.pre_lnorm = pre_lnorm
-        if do_lnorm:
-            self.layer_norm = nn.LayerNorm(d_model)
-            self.pre_lnorm = pre_lnorm
-        else:
-            self.pre_lnorm = None
         self.mark_parallel_comm(expert_dp_comm)
 
     def forward(self, inp: torch.Tensor):
@@ -72,11 +62,5 @@ class FMoETransformerMLP(FMoE):
         '''
         original_shape = inp.shape
         inp = inp.reshape(-1, self.d_model)
-        if self.pre_lnorm is not None and self.pre_lnorm:
-            inp = self.layer_norm(inp)
         output = super().forward(inp)
-        output = self.dropout(output)
-        output += inp
-        if self.pre_lnorm is not None and not self.pre_lnorm:
-            output = self.layer_norm(output)
         return output.reshape(original_shape)

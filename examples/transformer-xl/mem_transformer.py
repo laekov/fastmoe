@@ -384,11 +384,29 @@ class CustomizedMoEPositionwiseFF(FMoETransformerMLP):
             nn.Dropout(dropout)
         )
         super().__init__(num_expert=moe_num_expert, d_model=d_model, d_hidden=d_inner, top_k=moe_top_k,
-                do_lnorm=True, pre_lnorm=pre_lnorm, activation=activation, dropout=dropout)
+                activation=activation)
 
-    def forward(self, x):
-        x = super().forward(x)
-        return x
+        self.pre_lnorm = pre_lnorm
+        self.layer_norm = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, inp):
+        if self.pre_lnorm:
+            ##### layer normalization + positionwise feed-forward
+            core_out = super().forward(self.layer_norm(inp))
+            core_out = self.dropout(core_out)
+
+            ##### residual connection
+            output = core_out + inp
+        else:
+            ##### positionwise feed-forward
+            core_out = super().forward(inp)
+            core_out = self.dropout(core_out)
+
+            ##### residual connection + layer normalization
+            output = self.layer_norm(inp + core_out)
+
+        return output
 
 class DecoderLayer(nn.Module):
     def __init__(self, n_head, d_model, d_head, d_inner, dropout, **kwargs):
