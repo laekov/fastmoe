@@ -70,13 +70,13 @@ class FMoELinear(nn.Module):
             # like MOELinear.apply(x, weight, bias, count)
 
             # Solution 1
-            # bias = torch.repeat_interleave(self.bias,
-            #        fwd_expert_count.to(self.bias.device), dim=0)
+            bias = torch.repeat_interleave(self.bias,
+                fwd_expert_count.to(self.bias.device), dim=0)
 
             # Solution 2
-            bias_idx = torch.arange(self.num_expert)\
-                .repeat_interleave(fwd_expert_count)
-            bias = self.bias[bias_idx]
+            # bias_idx = torch.arange(self.num_expert)\
+            #     .repeat_interleave(fwd_expert_count)
+            # bias = self.bias[bias_idx]
 
             # Solution 3
             # bias = []
