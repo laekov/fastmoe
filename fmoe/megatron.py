@@ -3,8 +3,6 @@ The adaptor to seamlessly enable FastMoE in Megatron-LM v2.0 with at most two
 lines of modification.
 See `examples/megatron` for usage instructions.
 '''
-import torch
-
 from .transformer import FMoETransformerMLP
 from .distributed import DistributedGroupedDataParallel
 from .utils import get_torch_default_comm
@@ -28,12 +26,10 @@ class MegatronMLP(FMoETransformerMLP):
                 d_model=args.hidden_size, d_hidden=args.hidden_hidden_size,
                 world_size=world_size, mp_group=group,
                 expert_dp_comm='none' if args.distributed_experts else 'dp')
-        self.bias = torch.nn.parameter.Parameter(
-            torch.zeros(args.hidden_size, dtype=torch.float32)
-        )
-
     def forward(self, inp):
-        return super().forward(inp), self.bias
+        output = super().forward(inp)
+        bias = output.new_zeros(output.size(-1), requires_grad=False)
+        return output, bias
 
 
 def fmoefy(model, num_experts=None, distributed_experts=True,
