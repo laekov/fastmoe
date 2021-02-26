@@ -84,7 +84,10 @@ class MegatronMLP(FMoETransformerMLP):
                 world_size=world_size, mp_group=group,
                 expert_dp_comm='none' if args.distributed_experts else 'dp')
         self.hidden_size = args.hidden_size
-        self.rank = args.rank
+        if args.distributed_experts:
+            self.rank = args.rank
+        else:
+            self.rank = 0
         self.sigma = args.init_method_std
         self.num_layers = args.num_layers
         self.reset_parameters()
