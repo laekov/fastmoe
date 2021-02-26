@@ -99,6 +99,7 @@ def fmoefy(model, num_experts=None, distributed_experts=True,
     tensor_model_parall_comm x data_parallel_comm, which is not created.
     '''
     from megatron import get_args
+    from megatron import mpu
     args = get_args()
     if num_experts is not None:
         args.num_experts = num_experts
@@ -121,7 +122,7 @@ def fmoefy(model, num_experts=None, distributed_experts=True,
         args.distributed_experts = distributed_experts
 
     for l in model.language_model.transformer.layers:
-        l.mlp = MegatronMLP(args, None)
+        l.mlp = MegatronMLP(args, mpu.get_model_parallel_group())
     return model
 
 
