@@ -8,14 +8,16 @@ import torch.nn.functional as F
 
 
 class ZeroGate(nn.Module):
-    def __init__(self, d_model, num_expert, world_size, top_k=2):
+    r'''
+    Guide all input samples to gate 0.
+    '''
+    def __init__(self, _1, _2, _3, top_k=2):
         super().__init__()
         self.top_k = top_k
 
     def forward(self, inp):
         r'''
-        The naive implementation simply calculates the top-k of a linear layer's
-        output.
+        All output to expert 1
         '''
         idx = torch.zeros(inp.shape[0] * self.top_k,
                 dtype=torch.int64, device=inp.device)

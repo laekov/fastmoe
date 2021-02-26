@@ -3,22 +3,28 @@ The adaptor to seamlessly enable FastMoE in Megatron-LM v2.0 with at most two
 lines of modification.
 See `examples/megatron` for usage instructions.
 '''
+import math
+import numpy as np
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from .transformer import FMoETransformerMLP
 from .distributed import DistributedGroupedDataParallel
-from .utils import get_torch_default_comm
 
 
 class _FakeMegatronMLP(nn.Module):
     r'''
     A fake mlp without model parallelism for correctness testing
     '''
-    def __init__(self, args, group):
+    def __init__(self, args, _):
         super().__init__()
         self.fc1 = nn.Linear(args.hidden_size, args.hidden_hidden_size)
         self.fc2 = nn.Linear(args.hidden_hidden_size, args.hidden_size)
     def forward(self, x):
+        r'''
+        Directly use GeLU
+        '''
         x = self.fc1(x)
         x = F.gelu(x)
         x = self.fc2(x)
@@ -71,7 +77,7 @@ class MegatronMLP(FMoETransformerMLP):
         r'''
         Initialize the weight as linear layers.
         As megatron is using fixed random seed for some nasty stuff, an
-        additional numpy rng is used.  
+        additional numpy rng is used.
         '''
         rng = np.random.default_rng(np.random.randint(2048) + self.rank)
         _random_init_weight(self.experts.htoh4, rng)

@@ -150,6 +150,10 @@ class FMoE(nn.Module):
             self.experts_fused = True
 
     def expert_fn(self, inp, fwd_expert_count):
+        r'''
+        The default expert function which either calls the experts as a whole
+        or as separate experts.
+        '''
         if self.experts_fused:
             return self.experts(inp, fwd_expert_count)
         outputs = []
