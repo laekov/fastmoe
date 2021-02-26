@@ -47,7 +47,7 @@ class FMoETransformerMLP(FMoE):
         activation=torch.nn.GELU(),
         gate=NaiveGate,
         top_k=2,
-        expert_dp_comm='none',
+        expert_dp_comm='none'
     ):
         super().__init__(num_expert=num_expert, d_model=d_model, gate=gate,
                 top_k=top_k, world_size=world_size, mp_group=mp_group)

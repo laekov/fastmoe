@@ -90,14 +90,12 @@ class DistributedGroupedDataParallel(nn.Module):
                 groups[group_key] = [p]
             else:
                 groups[group_key].append(p)
-        for (dp_comm, dtype), group in groups.items():
+        for (dp_comm, _), group in groups.items():
             if dp_comm not in self.comms:
                 continue
             comm = self.comms[dp_comm]
             datas = [p.data for p in group]
             coalesced = _flatten_dense_tensors(datas)
-            if fp32_allreduce and dtype != torch.float32:
-                coalesced = coalesced.float()
             torch.distributed.broadcast(coalesced, 0, group=comm)
             torch.cuda.synchronize()
             synced = _unflatten_dense_tensors(coalesced, datas)

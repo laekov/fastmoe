@@ -10,6 +10,3 @@ a.out
 build
 *swp
 logs
-examples/transformer-xl/data
-examples/data
-examples/transformer-xl/LM-TFM-enwik8
