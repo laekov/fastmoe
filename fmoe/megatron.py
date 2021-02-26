@@ -3,18 +3,17 @@ The adaptor to seamlessly enable FastMoE in Megatron-LM v2.0 with at most two
 lines of modification.
 See `examples/megatron` for usage instructions.
 '''
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import math
 
 from .transformer import FMoETransformerMLP
 from .distributed import DistributedGroupedDataParallel
 from .utils import get_torch_default_comm
 
 
-class _MegatronMLP(nn.Module):
+class _FakeMegatronMLP(nn.Module):
+    r'''
+    A fake mlp without model parallelism for correctness testing
+    '''
     def __init__(self, args, group):
         super().__init__()
         self.fc1 = nn.Linear(args.hidden_size, args.hidden_hidden_size)

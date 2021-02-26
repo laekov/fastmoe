@@ -4,7 +4,6 @@ import time
 import math
 import os, sys
 import itertools
-import pathlib
 
 import numpy as np
 
@@ -16,31 +15,6 @@ from data_utils import get_lm_corpus
 from mem_transformer import MemTransformerLM
 from utils.exp_utils import create_exp_dir
 from utils.data_parallel import BalancedDataParallel
-
-class AverageMeter(object):
-    """Computes and stores the average and current value.
-
-    Examples::
-        >>> # Initialize a meter to record loss
-        >>> losses = AverageMeter()
-        >>> # Update meter after every minibatch update
-        >>> losses.update(loss_value, batch_size)
-    """
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
 
 parser = argparse.ArgumentParser(description='PyTorch Transformer Language Model')
 parser.add_argument('--data', type=str, default='../data/wikitext-103',
@@ -167,8 +141,15 @@ parser.add_argument('--static-loss-scale', type=float, default=1,
 parser.add_argument('--dynamic-loss-scale', action='store_true',
                     help='Use dynamic loss scaling.  If supplied, this argument'
                     ' supersedes --static-loss-scale.')
+parser.add_argument('--moe', action='store_true',
+                    help='replace position-wise ffn with moe position-wise ffn')
+parser.add_argument('--moe-num-expert', type=int, default=64,
+                    help='number of experts in MoE')
+parser.add_argument('--moe-top-k', type=int, default=2,
+                    help='top_k experts in hard gate of moe')
 args = parser.parse_args()
 args.tied = not args.not_tied
+assert args.moe_num_expert >= args.moe_top_k, "must have moe-num-expert >= moe-top_k"
 
 if args.d_embed < 0:
     args.d_embed = args.d_model
@@ -305,7 +286,8 @@ else:
         tie_projs=tie_projs, pre_lnorm=args.pre_lnorm, tgt_len=args.tgt_len,
         ext_len=args.ext_len, mem_len=args.mem_len, cutoffs=cutoffs,
         same_length=args.same_length, attn_type=args.attn_type,
-        clamp_len=args.clamp_len, sample_softmax=args.sample_softmax)
+        clamp_len=args.clamp_len, sample_softmax=args.sample_softmax,
+        moe=args.moe, moe_num_expert=args.moe_num_expert, moe_top_k=args.moe_top_k)
     model.apply(weights_init)
     model.word_emb.apply(weights_init) # ensure embedding init is not overridden by out_layer in case of weight sharing
 args.n_all_param = sum([p.nelement() for p in model.parameters()])
@@ -412,9 +394,6 @@ logging('#non emb params = {}'.format(args.n_nonemb_param))
 def evaluate(eval_iter):
     # Turn on evaluation mode which disables dropout.
     model.eval()
-    #  avg_nnzs = None
-    #  act_hist = None
-    #  co_act_hist = None
 
     # If the model does not use memory at all, make the ext_len longer.
     # Otherwise, make the mem_len longer and keep the ext_len the same.
@@ -434,33 +413,15 @@ def evaluate(eval_iter):
                 break
             ret = model(data, target, *mems)
             loss, mems = ret[0], ret[1:]
-            #  relu_outs, loss, mems = ret[0], ret[1], ret[2:]
             loss = loss.mean()
             total_loss += seq_len * loss.float().item()
             total_len += seq_len
-
-            #  acts = [(relu_out > 0).float().cpu() for relu_out in relu_outs]
-            #  if avg_nnzs is None:
-            #      n_layer = len(acts)
-            #      avg_nnzs = [AverageMeter() for i in range(n_layer)]
-            #      d_inner = acts[0].size(-1)
-            #      act_hist = [torch.zeros(d_inner) for i in range(n_layer)]
-            #      co_act_hist = [torch.zeros(d_inner, d_inner) for i in range(n_layer)]
-
-            #  for i, act in enumerate(acts):
-            #      nnz = act.sum().item() / act.numel()
-            #      avg_nnzs[i].update(nnz)
-            #      act_hist[i] += torch.sum(act, dim=[0, 1])
-            #      co_act = torch.einsum("ija,ijb->ab", (act, act))
-            #      co_act_hist[i] += co_act
-
 
     # Switch back to the training mode
     model.reset_length(args.tgt_len, args.ext_len, args.mem_len)
     model.train()
 
     return total_loss / total_len
-    #  return total_loss / total_len, avg_nnzs, act_hist, co_act_hist
 
 
 def train():
@@ -471,11 +432,6 @@ def train():
         mems = [tuple() for _ in range(args.batch_chunk)]
     else:
         mems = tuple()
-
-    #  avg_nnzs = None
-    #  act_hist = None
-    #  co_act_hist = None
-
     train_iter = tr_iter.get_varlen_iter() if args.varlen else tr_iter
     for batch, (data, target, seq_len) in enumerate(train_iter):
         model.zero_grad()
@@ -487,7 +443,6 @@ def train():
                 target_i = target_chunks[i].contiguous()
                 ret = para_model(data_i, target_i, *mems[i])
                 loss, mems[i] = ret[0], ret[1:]
-                #  relu_outs, loss, mems[i] = ret[0], ret[1], ret[2:]
                 loss = loss.float().mean().type_as(loss) / args.batch_chunk
                 if args.fp16:
                     optimizer.backward(loss)
@@ -497,28 +452,12 @@ def train():
         else:
             ret = para_model(data, target, *mems)
             loss, mems = ret[0], ret[1:]
-            #  relu_outs, loss, mems = ret[0], ret[1], ret[2:]
             loss = loss.float().mean().type_as(loss)
             if args.fp16:
                 optimizer.backward(loss)
             else:
                 loss.backward()
             train_loss += loss.float().item()
-        #  acts = [(relu_out > 0).float().cpu() for relu_out in relu_outs]
-        #  #  nnzs = [act.sum().item() / act.numel() for act in acts]
-        #  if avg_nnzs is None:
-        #      n_layer = len(acts)
-        #      avg_nnzs = [AverageMeter() for i in range(n_layer)]
-        #      d_inner = acts[0].size(-1)
-        #      act_hist = [torch.zeros(d_inner) for i in range(n_layer)]
-        #      co_act_hist = [torch.zeros(d_inner, d_inner) for i in range(n_layer)]
-
-        #  for i, act in enumerate(acts):
-        #      nnz = act.sum().item() / act.numel()
-        #      avg_nnzs[i].update(nnz)
-        #      act_hist[i] += torch.sum(act, dim=[0, 1])
-        #      co_act = torch.einsum("ija,ijb->ab", (act, act))
-        #      co_act_hist[i] += co_act
 
         if args.fp16:
             optimizer.clip_master_grads(args.clip)
@@ -557,39 +496,12 @@ def train():
                 log_str += ' | bpc {:9.5f}'.format(cur_loss / math.log(2))
             else:
                 log_str += ' | ppl {:9.3f}'.format(math.exp(cur_loss))
-            #  final_avg_nnzs = [avg_nnzs[i].avg for i in range(len(avg_nnzs))]
-            #  log_str += ' | avgnnz {:5.2f} | maxnnz {:5.2f}'.format(
-            #          sum(final_avg_nnzs)/len(final_avg_nnzs)*100,
-            #          max(final_avg_nnzs)*100,
-            #          )
             logging(log_str)
-
-            #  co_act_dir = pathlib.Path(logging.keywords['log_path']).parent.joinpath("co_act")
-            #  co_act_dir.mkdir(parents=True, exist_ok=True)
-            #  co_act_path = co_act_dir.joinpath('epoch_%d_train_step_%d.pt' % (epoch, train_step))
-            #  torch.save(co_act_hist, co_act_path)
-            #  for i in range(len(avg_nnzs)):
-            #      avg_nnzs[i].reset()
-            #      act_hist[i] /= act_hist[i].sum()
-            #      prob, index = torch.topk(act_hist[i], min(1024, act_hist[i].size(-1)))
-            #      log_str = '| layer {:2d} | top 64 prob {:3.2f} | top 128 prob {:3.2f} | top 256 prob {:3.2f} | top 512 prob {:3.2f} | top 1024 prob {:3.2f}'.format(
-            #              i+1,
-            #              prob[:64].sum().item(),
-            #              prob[:128].sum().item(),
-            #              prob[:256].sum().item(),
-            #              prob[:512].sum().item(),
-            #              prob[:1024].sum().item()
-            #              )
-            #      logging(log_str)
-            #      act_hist[i] = 0.
-            #      co_act_hist[i] = 0.
-
             train_loss = 0
             log_start_time = time.time()
 
         if train_step % args.eval_interval == 0:
             val_loss = evaluate(va_iter)
-            #  val_loss, eval_avg_nnzs, eval_act_hist, eval_co_act_hist = evaluate(va_iter)
             logging('-' * 100)
             log_str = '| Eval {:3d} at step {:>8d} | time: {:5.2f}s ' \
                       '| valid loss {:5.2f}'.format(
@@ -599,11 +511,6 @@ def train():
                 log_str += ' | bpc {:9.5f}'.format(val_loss / math.log(2))
             else:
                 log_str += ' | valid ppl {:9.3f}'.format(math.exp(val_loss))
-            #  final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
-            #  log_str += ' | avgnnz {:5.2f} | maxnnz {:5.2f}'.format(
-            #          sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100,
-            #          max(final_eval_avg_nnzs)*100
-            #          )
             logging(log_str)
             logging('-' * 100)
             # Save the model if the validation loss is the best we've seen so far.
@@ -653,7 +560,6 @@ para_model = model.to(device)
 
 # Run on test data.
 test_loss = evaluate(te_iter)
-#  test_loss, eval_avg_nnzs, eval_act_hist, eval_co_act_hist = evaluate(te_iter)
 logging('=' * 100)
 if args.dataset in ['enwik8', 'text8']:
     logging('| End of training | test loss {:5.2f} | test bpc {:9.5f}'.format(
@@ -661,11 +567,4 @@ if args.dataset in ['enwik8', 'text8']:
 else:
     logging('| End of training | test loss {:5.2f} | test ppl {:9.3f}'.format(
         test_loss, math.exp(test_loss)))
-
-#  final_eval_avg_nnzs = [eval_avg_nnzs[i].avg for i in range(len(eval_avg_nnzs))]
-#  log_str = ' | avgnnz {:5.2f} | maxnnz {:5.2f}'.format(
-#          sum(final_eval_avg_nnzs)/len(final_eval_avg_nnzs)*100,
-#          max(final_eval_avg_nnzs)*100
-#          )
-#  logging(log_str)
 logging('=' * 100)
