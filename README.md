@@ -72,7 +72,9 @@ FastMoE supports both data parallel and model parallel.
 In FastMoE's data parallel mode, both the gate and the experts are replicated on each worker. 
 The following figure shows the forward pass of a 3-expert MoE with 2-way data parallel.
 
-![FastMoE with data parallel](doc/fastmoe_data_parallel.png)
+<p align="center">
+<img src="doc/fastmoe_data_parallel.png" width="600">
+</p>
 
 For data parallel, no extra coding is needed. FastMoE works seamlessly with PyTorch's `DataParallel` or `DistributedDataParallel`.
 The only drawback of data parallel is that the number of experts is constrained by each worker's memory.
@@ -85,7 +87,9 @@ Thus, by introducing additional communication cost, FastMoE enjoys a large exper
 
 The following figure shows the forward pass of a 6-expert MoE with 2-way model parallel. Note that experts 1-3 are located in worker 1 while experts 4-6 are located in worker 2.
 
-![FastMoE with model parallel](doc/fastmoe_model_parallel.png)
+<p align="center">
+<img src="doc/fastmoe_model_parallel.png" width="600">
+</p>
 
 FastMoE's model parallel requires sophiscated parallel strategies that neither PyTorch nor
 Megatron-LM provides. The `fmoe.DistributedGroupedDataParallel` module is
