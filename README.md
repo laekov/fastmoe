@@ -31,7 +31,8 @@ it, pass environment variable `USE_NCCL=1` to the setup script.
 
 Note that an extra NCCL developer package is needed, which has to be consistant
 with your PyTorch's NCCL version, which can be inspected by running
-`torch.cuda.nccl.version()`. The [official PyTorch docker image]() is
+`torch.cuda.nccl.version()`. The 
+[official PyTorch docker image](https://hub.docker.com/r/pytorch/pytorch) is
 recommended, as the environment is well-setup there. Otherwise, you can access
 the [download link of all NCCL
 versions](https://developer.nvidia.com/nccl/nccl-legacy-downloads) to download
