@@ -1,7 +1,9 @@
 FastMoE
 ===
 
-[Release note](docs/release-note.md) | [中文 Readme](docs/readme-cn.md) | [Slack workspace](https://join.slack.com/t/fastmoe/shared_invite/zt-mz0ai6ol-ggov75D62YsgHfzShw8KYw)
+[Release note](doc/release-note.md)
+| [中文文档](doc/readme-cn.md)
+| [Slack workspace](https://join.slack.com/t/fastmoe/shared_invite/zt-mz0ai6ol-ggov75D62YsgHfzShw8KYw)
 
 ## Introduction
 
@@ -24,7 +26,7 @@ FastMoE contains a set of PyTorch customized opearators, including both C and
 Python components. Use `python setup.py install` to easily install and enjoy
 using FastMoE for training.
 
-The distributed expert feature is disabled by default. If you want to disable
+The distributed expert feature is disabled by default. If you want to enable
 it, pass environment variable `USE_NCCL=1` to the setup script.
 
 Note that an extra NCCL developer package is needed, which has to be consistant
@@ -69,7 +71,7 @@ the MLP layer by the `FMoE` layers.
 
 FastMoE supports both data parallel and model parallel. 
 
-### Data Parallel
+#### Data Parallel
 
 In FastMoE's data parallel mode, both the gate and the experts are replicated on each worker. 
 The following figure shows the forward pass of a 3-expert MoE with 2-way data parallel.
@@ -81,7 +83,7 @@ The following figure shows the forward pass of a 3-expert MoE with 2-way data pa
 For data parallel, no extra coding is needed. FastMoE works seamlessly with PyTorch's `DataParallel` or `DistributedDataParallel`.
 The only drawback of data parallel is that the number of experts is constrained by each worker's memory.
 
-### Model Parallel
+#### Model Parallel
 
 In FastMoE's model parallel mode, the gate network is still replicated on each worker but
 experts are placed separately across workers.
