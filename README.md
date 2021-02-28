@@ -1,4 +1,4 @@
-Fast MoE
+FastMoE
 ===
 
 ## Introduction
@@ -18,9 +18,9 @@ support, typically versions `>=2.7.5`, is needed.
 
 ### Installing
 
-Fast MoE contains a set of PyTorch customized opearators, including both C and
+FastMoE contains a set of PyTorch customized opearators, including both C and
 Python components. Use `python setup.py install` to easily install and enjoy
-using Fast MoE for training.
+using FastMoE for training.
 
 The distributed expert feature is disabled by default. If you want to disable
 it, pass environment variable `USE_NCCL=1` to the setup script.
@@ -35,10 +35,10 @@ the NCCL package that is suitable for you.
 
 ## Usage 
 
-### FMoEfy a transformer model
+### FMoEfy a Transformer model
 
-Transformer is currently the most popular model to be extended by MoE. Using
-Fast MoE, a transformer-based model can be extended as MoE by an one-key plugin
+Transformer is currently one of the most popular models to be extended by MoE. Using
+FastMoE, a Transformer-based model can be extended as MoE by an one-key plugin
 shown as follow.
 
 For example, when using [Megatron-LM](https://github.com/nvidia/megatron-lm),
@@ -57,17 +57,38 @@ train(model, ...)
 A detailed tutorial to _moefy_ Megatron-LM can be found
 [here](examples/megatron).
 
-### Using Fast MoE as a PyTorch module
+### Using FastMoE as a PyTorch module
 
 An example MoE transformer model can be seen in the
 [Transformer-XL](examples/transformer-xl) example. The easist way is to replace
 the MLP layer by the `FMoE` layers.
 
-### Using Fast MoE in Parallel
+### Using FastMoE in Parallel
 
-For data parallel, no extra coding is needed.
+FastMoE supports both data parallel and model parallel. 
 
-For expert parallel, in which experts are located separately across workers, 
-which requires sophiscated data-parallel strategies that neither PyTorch nor
+### Data Parallel
+
+In FastMoE's data parallel mode, both the gate and the experts are replicated on each worker. 
+The following figure shows the forward pass of a 3-expert MoE with 2-way data parallel.
+
+![FastMoE with data parallel](doc/fastmoe_data_parallel.png)
+
+For data parallel, no extra coding is needed. FastMoE works seamlessly with PyTorch's `DataParallel` or `DistributedDataParallel`.
+The only drawback of data parallel is that the number of experts is constrained by each worker's memory.
+
+### Model Parallel
+
+In FastMoE's model parallel mode, the gate network is still replicated on each worker but
+experts are placed separately across workers.
+Thus, by introducing additional communication cost, FastMoE enjoys a large expert pool whose size is proportional to the number of workers.
+
+The following figure shows the forward pass of a 6-expert MoE with 2-way model parallel. Note that experts 1-3 are located in worker 1 while experts 4-6 are located in worker 2.
+
+![FastMoE with model parallel](doc/fastmoe_model_parallel.png)
+
+FastMoE's model parallel requires sophiscated parallel strategies that neither PyTorch nor
 Megatron-LM provides. The `fmoe.DistributedGroupedDataParallel` module is
 introduced to replace PyTorch's DDP module.
+
+
