@@ -1,4 +1,4 @@
-![](doc/logo/square.png)
+<img height='40px' src='doc/logo/rect.png'/>
 
 [Release note](doc/release-note.md)
 | [中文文档](doc/readme-cn.md)
