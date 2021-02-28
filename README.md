@@ -1,6 +1,8 @@
 FastMoE
 ===
 
+[Release note](docs/release-note.md) | [中文 Readme](docs/readme-cn.md) | [Slack workspace](https://join.slack.com/t/fastmoe/shared_invite/zt-mz0ai6ol-ggov75D62YsgHfzShw8KYw)
+
 ## Introduction
 
 An easy-to-use but efficient implementation of the Mixture of Experts (MoE) 
@@ -95,4 +97,6 @@ FastMoE's model parallel requires sophiscated parallel strategies that neither P
 Megatron-LM provides. The `fmoe.DistributedGroupedDataParallel` module is
 introduced to replace PyTorch's DDP module.
 
+## Troubleshootings / Discussion
 
+If you have any problem using FastMoE, or you are interested in getting involved in developing FastMoE, feel free to join the [our slack channel](https://join.slack.com/t/fastmoe/shared_invite/zt-mz0ai6ol-ggov75D62YsgHfzShw8KYw).
