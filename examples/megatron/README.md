@@ -1,15 +1,16 @@
-Fast MoE currently works with the `v2.0` release of
+FastMoE currently works with both `v2.0` and `v2.1` release of
 [Megatron-LM](https://github.com/nvidia/megatron-lm).
 
-A [patch](moefy.patch) is used to easily enable MoE in Megatron-LM for training
-Bert.
+Patches which you can find in this directory are used to easily enable MoE in
+different versions of Megatron-LM for training Bert. The usage is the same in
+other training scripts.
 
 The patch works in the following way.
 
-### Building the model
+### Building the model in FastMoE style
 
 In `pretrain_bert.py`, the `fmoe.megatron.fmoefy` function is used as an
-entrance to one-key introduce Fast MoE layer to replace the MLP layers in the
+entrance to one-key introduce FastMoE layer to replace the MLP layers in the
 transformer language models.
 
 ```python
@@ -21,7 +22,7 @@ Note that the `fmoefy` function currently only takes a standard Megatron-LM's
 top-level raw model as input, i.e. the MLP layers should be available at
 `model.language_model.transformer.layers[i].mlp`.
 
-### Using expert parallellization
+### Using FastMoE's model parallellization
 
 In `megatron/training.py`, the `LocalDDP` module is replaced by the one in 
 `fmoe.megatron` to enable the sophiscated data parallel strategies that can
@@ -35,4 +36,4 @@ from fmoe.megatron import DistributedDataParallel as LocalDDP
 
 ### Train as usual
 
-Start traning with Fast MoE by using the scripts provided by Megatron-LM.
+Start traning with FastMoE by using the scripts provided by Megatron-LM.
