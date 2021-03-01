@@ -67,7 +67,7 @@ FastMoE 支持数据并行和模型并行.
 
 在 FastMoE 的数据并行模式下,
 门网络(gate)和专家网络都被复制地放置在各个运算单元上.
-下力展示了一个有三个专家的两路数据并行MoE模型进行前向计算的方式.
+下图展示了一个有三个专家的两路数据并行MoE模型进行前向计算的方式.
 
 <p align="center">
 <img src="fastmoe_data_parallel.png" width="600">
