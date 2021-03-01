@@ -1,3 +1,24 @@
+## v0.1.1
+
+### Distributed
+
+- Broadcast data-parallel parameters before training.
+
+### Megatron adaption
+
+- Initialize `FMoELinear` parameters using different seed in model parallel even using the same random seed in megatron.
+- Use proper comm for mp and dp.
+
+### Transformer-XL example
+
+- Improve scripts.
+
+### Misc
+
+- Logo and slack workspace link.
+- Document in Chinese.
+- Figures to explain how FastMoE works.
+
 ## v0.1.0
 
 ### Functions

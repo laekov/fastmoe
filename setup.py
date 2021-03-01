@@ -15,9 +15,9 @@ if os.environ.get('USE_NCCL', '0') == '1':
 
 if __name__ == '__main__':
     setuptools.setup(
-        name='fmoe',
-        version='0.1.0',
-        description='An efficient Mixture-of-Experts impl. for PyTorch',
+        name='fastmoe',
+        version='0.1.1',
+        description='An efficient Mixture-of-Experts system for PyTorch',
         author='Jiaao He, Jiezhong Qiu and Aohan Zeng',
         author_email='hja20@mails.tsinghua.edu.cn',
         license='Apache-2',
