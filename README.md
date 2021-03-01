@@ -6,7 +6,7 @@
 
 ## Introduction
 
-An easy-to-use but efficient implementation of the Mixture of Experts (MoE) 
+An easy-to-use and efficient system to support the Mixture of Experts (MoE) 
 model for PyTorch. 
 
 ## Installation
