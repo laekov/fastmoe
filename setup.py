@@ -3,11 +3,9 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
 
 
-CUDA_HELPER = os.environ.get('CUDA_HELPER', '/usr/local/cuda/samples/common/inc')
-cxx_flags = [
-        '-I{}'.format(CUDA_HELPER)
-        ]
+cxx_flags = []
 ext_libs = []
+
 if os.environ.get('USE_NCCL', '0') == '1':
     cxx_flags.append('-DMOE_USE_NCCL')
     ext_libs.append('nccl')

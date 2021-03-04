@@ -4,6 +4,7 @@
 #include <vector>
 #include <torch/extension.h>
 #include <torch/torch.h>
+#include "helper_cuda.h"
 
 std::vector<torch::Tensor> moe_cuda_expert_count(
     torch::Tensor gate, size_t num_expert);

@@ -5,7 +5,6 @@
 #include <iostream>
 
 #include "cuda_stream_manager.h"
-#include <helper_cuda.h> 
 
 #define SMGR_N_STREAMS 16
 

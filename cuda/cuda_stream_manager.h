@@ -1,8 +1,7 @@
 #ifndef CUDA_STREAM_MANAGER_H
 #define CUDA_STREAM_MANAGER_H
 
-#include <cuda_runtime.h>
-#include <cublas_v2.h>
+#include "helper_cuda.h"
 
 #ifdef MOE_USE_NCCL
 #include <nccl.h>
