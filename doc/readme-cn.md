@@ -52,11 +52,11 @@ model = fmoefy(model, num_experts=<number of experts per worker>)
 train(model, ...)
 ```
 
-一个更详细的在 Megatron-LM 中使用 `fmoefy` 函数的样例参见[此处](examples/megatron).
+一个更详细的在 Megatron-LM 中使用 `fmoefy` 函数的样例参见[此处](../examples/megatron).
 
 ### 将 FastMoE 作为一个网络模块使用
 
-一个使用 FastMoE 的 Transformer 模型见[这个示例](examples/transformer-xl).
+一个使用 FastMoE 的 Transformer 模型见[这个示例](../examples/transformer-xl).
 最简单的使用方式是使用 `FMoE` 层来代替 `MLP` 层. 
 
 ### 分布式地使用 FastMoE
