@@ -30,7 +30,7 @@ class _FakeMegatronMLP(nn.Module):
         x = self.fc2(x)
         return x, torch.zeros_like(x)
 
-def _magatron_init_method(self, rng, sigma):
+def _megatron_init_method(self, rng, sigma):
     r'''
     Init method based on N(0, sigma).
     Copied from Megatron-LM
@@ -99,9 +99,9 @@ class MegatronMLP(FMoETransformerMLP):
         additional numpy rng is used.
         '''
         rng = np.random.default_rng(np.random.randint(2048) + self.rank)
-        _magatron_init_method(self.experts.htoh4, rng, self.sigma)
+        _megatron_init_method(self.experts.htoh4, rng, self.sigma)
         std = self.sigma / math.sqrt(2.0 * self.num_layers)
-        _magatron_init_method(self.experts.h4toh, rng, std)
+        _megatron_init_method(self.experts.h4toh, rng, std)
 
     def forward(self, inp):
         return super().forward(inp), torch.zeros(self.hidden_size,

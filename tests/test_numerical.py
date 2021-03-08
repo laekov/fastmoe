@@ -5,12 +5,14 @@ from typing import List, Type, Union
 import pytest
 import torch
 import torch.nn as nn
+import numpy as np
 
 from copy import deepcopy
 from fmoe.gates import NaiveGate
 from fmoe.layers import FMoE
 from fmoe.transformer import _Expert
 from fmoe.distributed import DistributedGroupedDataParallel as LocalDDP
+from fmoe.megatron import _megatron_init_method
 from moe import BruteForceMoELinear, BruteForceMoE, NaiveExpert, LinearExpert
 
 
@@ -66,12 +68,17 @@ class MyMoE(FMoE):
         super().__init__(
             num_expert=num_expert,
             d_model=d_model,
+
             gate=NaiveGate,
             world_size=world_size,
             mp_group=mp_group,
             top_k=top_k,
         )
         self.experts = _Expert(num_expert, d_model, d_hidden, activation)
+
+        rng = np.random.default_rng(1234)
+        _megatron_init_method(self.experts.htoh4, rng, 1.)
+        _megatron_init_method(self.experts.h4toh, rng, 1.)
 
 
 @pytest.mark.parametrize("num_expert", [4, 8])
@@ -353,23 +360,11 @@ def _test_fmoe_local_ddp(rank, world_size, mp_group, dp_group, world_group):
 
 if __name__ == "__main__":
     test_fmoe_linear(
-        batch_size=4,
-        num_expert=4,
-        d_model=8,
+        batch_size=2,
+        num_expert=2,
+        d_model=2,
         top_k=2,
         d_hidden=16,
-        rank=0,
-        world_size=1,
-        mp_group=None,
-        dp_group=None,
-        world_group=None,
-    )
-    test_fmoe(
-        batch_size=4,
-        num_expert=4,
-        d_model=8,
-        top_k=2,
-        expert=NaiveExpert,
         rank=0,
         world_size=1,
         mp_group=None,
