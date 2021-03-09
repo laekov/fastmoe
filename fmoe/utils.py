@@ -1,13 +1,13 @@
-r'''
+r"""
 Utils to play with PyTorch.
-'''
+"""
 import torch.distributed as dist
 
 
 # pylint: disable=broad-except
 # pylint: disable=protected-access
 def get_torch_default_comm():
-    r'''
+    r"""
     The NCCL communicator is needed so that Fast MoE can perform customized
     communication operators in the C code. However, it is not a publicly
     available variable. Therefore, a hacking class of the `ProcessGroupNCCL`
@@ -15,7 +15,7 @@ def get_torch_default_comm():
     communicator out from the object. As PyTorch's private interface varies from
     time to time, different hacking techniques are tried one-by-one to be
     compatible with various versions of PyTorch.
-    '''
+    """
     try:
         comm = dist.distributed_c10d._get_default_group()
         return comm
@@ -27,4 +27,4 @@ def get_torch_default_comm():
             return comm
     except Exception as _:
         pass
-    raise RuntimeError('Unsupported PyTorch version')
+    raise RuntimeError("Unsupported PyTorch version")

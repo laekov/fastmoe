@@ -40,8 +40,7 @@ def moe_prepare_forward(gate, num_expert, world_size, comm=None):
             )
         else:
             global_expert_count = local_expert_count
-        fwd_expert_count = global_expert_count.view(world_size,
-                num_expert).sum(dim=0)
+        fwd_expert_count = global_expert_count.view(world_size, num_expert).sum(dim=0)
         fwd_batch_size = int(fwd_expert_count.sum().item())
     return (
         pos,
@@ -58,6 +57,7 @@ class MOEScatter(Function):
     If `world_size` is greater than 1, the samples will first be locally
     scattered, and then exchanged across workers.
     """
+
     @staticmethod
     def forward(
         ctx,
@@ -107,6 +107,7 @@ class MOELinear(Function):
     r"""
     Computes linear operators within one GPU on different experts simutaneously.
     """
+
     @staticmethod
     def forward(ctx, global_input_buf, weight, fwd_expert_count):
         (global_output_buf,) = fmoe_cuda.forward(
@@ -130,6 +131,7 @@ class MOEGather(Function):
     Gather output samples from contiguous alone experts back to [batch x
     sequences]. Works symmetrically with MOEScatter.
     """
+
     @staticmethod
     def forward(
         ctx,
@@ -176,9 +178,10 @@ class MOEGather(Function):
 
 
 class AllGather(Function):
-    r'''
+    r"""
     A wrapper for the All-Gather function to support auto-differentiation.
-    '''
+    """
+
     @staticmethod
     def forward(ctx, inp, rank, world_size, group):
         tensor_list = [torch.empty_like(inp) for _ in range(world_size)]
@@ -191,13 +194,14 @@ class AllGather(Function):
     @staticmethod
     def backward(ctx, grad_out):
         rank, dim0 = ctx.args
-        return grad_out[rank * dim0:(rank + 1) * dim0], None, None, None
+        return grad_out[rank * dim0 : (rank + 1) * dim0], None, None, None
 
 
 class Slice(Function):
-    r'''
+    r"""
     A wrapper for the Slice function to support auto-differentiation.
-    '''
+    """
+
     @staticmethod
     def forward(ctx, inp, rank, world_size, group):
         B: int = inp.shape[0]

@@ -142,6 +142,7 @@ disable=print-statement,
         arguments-differ,
         import-outside-toplevel,
         signature-differs,
+        bad-continuation,
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

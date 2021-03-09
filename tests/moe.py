@@ -20,24 +20,19 @@ class BruteForceMoELinear(nn.Module):
         self.weight_htoh4 = nn.Parameter(
             torch.Tensor(num_expert * world_size, d_hidden, d_model)
         )
-        self.bias_htoh4 = nn.Parameter(
-            torch.Tensor(num_expert * world_size, d_hidden)
-        )
+        self.bias_htoh4 = nn.Parameter(torch.Tensor(num_expert * world_size, d_hidden))
         self.weight_h4toh = nn.Parameter(
             torch.Tensor(num_expert * world_size, d_model, d_hidden)
         )
-        self.bias_h4toh = nn.Parameter(
-            torch.Tensor(num_expert * world_size, d_model)
-        )
+        self.bias_h4toh = nn.Parameter(torch.Tensor(num_expert * world_size, d_model))
         self.top_k = top_k
 
     def forward(self, inp, gate_idx, gate_score):
         gate_long = gate_idx.long()
         batch_size = inp.size(0)
-        o = torch.empty(batch_size, self.d_model, dtype=inp.dtype,
-                device=inp.device)
+        o = torch.empty(batch_size, self.d_model, dtype=inp.dtype, device=inp.device)
         for i in range(self.weight_htoh4.shape[0]):
-            idx = (gate_idx == i)
+            idx = gate_idx == i
             x = inp[idx]
             x = x @ self.weight_htoh4[i].t()
             x = x + self.bias_htoh4[i]
@@ -45,8 +40,9 @@ class BruteForceMoELinear(nn.Module):
             x = x @ self.weight_h4toh[i].t()
             x = x + self.bias_h4toh[i]
             o[idx] = x
-        x = torch.bmm(gate_score, o.view(-1, self.top_k, 
-            self.d_model)).reshape(-1, self.d_model)
+        x = torch.bmm(gate_score, o.view(-1, self.top_k, self.d_model)).reshape(
+            -1, self.d_model
+        )
         return x
 
 

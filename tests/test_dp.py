@@ -18,7 +18,7 @@ class MyMoE(FMoE):
             gate=NaiveGate,
             world_size=1,
             mp_group=None,
-            top_k=top_k
+            top_k=top_k,
         )
         self.experts = _Expert(num_expert, d_model, d_hidden, activation)
 
@@ -46,5 +46,5 @@ def test_fmoe_dp(
         output = moe_dp(torch.rand(batch_size, d_model).cuda())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_fmoe_dp(4, 2, 4, 16, 32)

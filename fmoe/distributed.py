@@ -1,6 +1,6 @@
-r'''
+r"""
 Supportive modules to conduct distributed training
-'''
+"""
 import torch
 import torch.nn as nn
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
@@ -8,7 +8,7 @@ from .utils import get_torch_default_comm
 
 
 class DistributedGroupedDataParallel(nn.Module):
-    r'''
+    r"""
     A customized DDP module to support different all-reduce regions in the
     model.  The all-reduce region is defined as an attribution `dp_comm` in the
     weight object.
@@ -20,36 +20,42 @@ class DistributedGroupedDataParallel(nn.Module):
     If it is set to `world`, the gradients is synchronized across all workers,
     regardless their model or data parallel group. This is extremely useful for
     shared layers like the gate.
-    '''
-    def __init__(self, module, mp_group=None, dp_group=None, world_group=None,
-            auto_allreduce=False):
-        assert not auto_allreduce, 'Automatic all-reduce is not implemented yet'
+    """
+
+    def __init__(
+        self,
+        module,
+        mp_group=None,
+        dp_group=None,
+        world_group=None,
+        auto_allreduce=False,
+    ):
+        assert not auto_allreduce, "Automatic all-reduce is not implemented yet"
 
         super().__init__()
         self.module = module
 
         self.comms = dict()
         if mp_group is not None:
-            self.comms['mp'] = mp_group
+            self.comms["mp"] = mp_group
         if dp_group is not None:
-            self.comms['dp'] = dp_group
+            self.comms["dp"] = dp_group
         else:
-            self.comms['dp'] = get_torch_default_comm()
+            self.comms["dp"] = get_torch_default_comm()
         if world_group is None:
-            self.comms['world'] = get_torch_default_comm()
+            self.comms["world"] = get_torch_default_comm()
         else:
-            self.comms['world'] = world_group
+            self.comms["world"] = world_group
 
-        def allreduce_params(no_scale=False, reduce_after=False,
-                fp32_allreduce=False):
+        def allreduce_params(no_scale=False, reduce_after=False, fp32_allreduce=False):
             groups = dict()
             for p in self.module.parameters():
                 if not p.requires_grad or p.grad is None:
                     continue
-                if hasattr(p, 'dp_comm'):
+                if hasattr(p, "dp_comm"):
                     dp_comm = p.dp_comm
                 else:
-                    dp_comm = 'dp'
+                    dp_comm = "dp"
                 group_key = (dp_comm, p.dtype)
                 if group_key not in groups:
                     groups[group_key] = [p]
@@ -81,10 +87,10 @@ class DistributedGroupedDataParallel(nn.Module):
         for p in self.module.parameters():
             if not p.requires_grad or p.grad is None:
                 continue
-            if hasattr(p, 'dp_comm'):
+            if hasattr(p, "dp_comm"):
                 dp_comm = p.dp_comm
             else:
-                dp_comm = 'dp'
+                dp_comm = "dp"
             group_key = (dp_comm, p.dtype)
             if group_key not in groups:
                 groups[group_key] = [p]
@@ -103,7 +109,7 @@ class DistributedGroupedDataParallel(nn.Module):
                 d.copy_(s)
 
     def forward(self, *args, **kwargs):
-        r'''
+        r"""
         Directly call the module's forward function.
-        '''
+        """
         return self.module(*args, **kwargs)

@@ -1,6 +1,6 @@
-r'''
+r"""
 Layers that FMoE provides to users
-'''
+"""
 import torch
 import torch.nn as nn
 
@@ -11,14 +11,21 @@ from .gates import NaiveGate
 
 
 class FMoELinear(nn.Module):
-    r'''
+    r"""
     A linear layer that contains multiple experts.
     As multiple experts can be placed on the same worker, the computation can be
     performed in parallel to increase the performance.
     The FMoELinear module provides such function.
-    '''
-    def __init__(self, num_expert: int, in_feat: int, out_feat: int,
-            bias: bool = True, rank: int = 0):
+    """
+
+    def __init__(
+        self,
+        num_expert: int,
+        in_feat: int,
+        out_feat: int,
+        bias: bool = True,
+        rank: int = 0,
+    ):
         super().__init__()
         self.num_expert = num_expert
         self.in_feat = in_feat
@@ -28,12 +35,12 @@ class FMoELinear(nn.Module):
         if bias:
             self.bias = nn.Parameter(torch.Tensor(num_expert, out_feat))
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
     def forward(self, inp, fwd_expert_count):
-        r'''
+        r"""
         Call MOE function
-        '''
+        """
         x = MOELinear.apply(inp, self.weight, fwd_expert_count)
         if self.bias is not None:
             # TODO: torch.repeat_interleave seems have numerical
@@ -45,8 +52,9 @@ class FMoELinear(nn.Module):
             # like MOELinear.apply(x, weight, bias, count)
 
             # Solution 1
-            bias = torch.repeat_interleave(self.bias,
-                fwd_expert_count.to(self.bias.device), dim=0)
+            bias = torch.repeat_interleave(
+                self.bias, fwd_expert_count.to(self.bias.device), dim=0
+            )
 
             # Solution 2
             # bias_idx = torch.arange(self.num_expert)\
@@ -67,24 +75,27 @@ class FMoELinear(nn.Module):
         return x
 
     def extra_repr(self) -> str:
-        return 'num_expert={}, in_features={}, \
-        out_features={}, bias={}, rank={}'.format(
-                    self.num_expert, self.in_feat,
-                    self.out_feat, self.bias is not None, self.rank
+        return "num_expert={}, in_features={}, \
+        out_features={}, bias={}, rank={}".format(
+            self.num_expert,
+            self.in_feat,
+            self.out_feat,
+            self.bias is not None,
+            self.rank,
         )
 
 
 def mark_module_parallel_comm(module, comm):
-    r'''
+    r"""
     Mark all parameters in `module` as doing data parallel in `comm`, where
     `comm` may be one of `'world', 'dp', 'none'`.
-    '''
+    """
     for p in module.parameters():
-        setattr(p, 'dp_comm', comm)
+        setattr(p, "dp_comm", comm)
 
 
 def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
-    r'''
+    r"""
     A private function that performs the following steps to complete the MoE
     computation.
     * Count the number of tokens from each worker to each expert.
@@ -94,14 +105,16 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
     * Gather the output features of experts back, and reorder them as sentences.
     Intermediate results like expert counts are hidden from users by this
     function.
-    '''
+    """
     (
-        pos, local_expert_count, global_expert_count, fwd_expert_count,
-        fwd_batch_size
+        pos,
+        local_expert_count,
+        global_expert_count,
+        fwd_expert_count,
+        fwd_batch_size,
     ) = moe_prepare_forward(gate, num_expert, world_size)
     x = MOEScatter.apply(
-        inp, pos, local_expert_count, global_expert_count, fwd_batch_size,
-        world_size
+        inp, pos, local_expert_count, global_expert_count, fwd_batch_size, world_size
     )
     x = expert_fn(x, fwd_expert_count)
     x = MOEGather.apply(
@@ -111,7 +124,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
 
 
 class FMoE(nn.Module):
-    r'''
+    r"""
     A general moe implementation that supports an arbitrary module as the
     expert.
     * `num_expert` stands for the number of experts on **each** worker.
@@ -126,9 +139,18 @@ class FMoE(nn.Module):
     * `gate` is a gate class which can found in `fmoe.gates`.
     * `expert` can be specified as a module class, it is used to generate
     `num_expert` expert modules.
-    '''
-    def __init__(self, num_expert=32, d_model=1024, world_size=1, mp_group=None,
-            top_k=2, gate=NaiveGate, expert=None):
+    """
+
+    def __init__(
+        self,
+        num_expert=32,
+        d_model=1024,
+        world_size=1,
+        mp_group=None,
+        top_k=2,
+        gate=NaiveGate,
+        expert=None,
+    ):
         super().__init__()
         self.num_expert = num_expert
         self.d_model = d_model
@@ -143,34 +165,33 @@ class FMoE(nn.Module):
         self.top_k = top_k
         self.gate = gate(d_model, num_expert, world_size, top_k)
         if expert is not None:
-            self.experts = nn.ModuleList([expert(d_model)
-                for _ in range(num_expert)])
+            self.experts = nn.ModuleList([expert(d_model) for _ in range(num_expert)])
             self.experts_fused = False
         else:
             self.experts_fused = True
 
     def expert_fn(self, inp, fwd_expert_count):
-        r'''
+        r"""
         The default expert function which either calls the experts as a whole
         or as separate experts.
-        '''
+        """
         if self.experts_fused:
             return self.experts(inp, fwd_expert_count)
         outputs = []
         base_idx = 0
         for i in range(self.num_expert):
             batch_size = fwd_expert_count[i].item()
-            inp_slice = inp[base_idx:base_idx + batch_size]
+            inp_slice = inp[base_idx : base_idx + batch_size]
             outputs.append(self.experts[i](inp_slice))
             base_idx += batch_size
         return torch.cat(outputs, dim=0)
 
-    def mark_parallel_comm(self, expert_dp_comm='none'):
-        r'''
+    def mark_parallel_comm(self, expert_dp_comm="none"):
+        r"""
         Automatically mark the data parallel comms of the parameters within the
         module. This can be typically called at the end of the __init__ function
         in child classes.
-        '''
+        """
         if self.experts is not None:
             comm = expert_dp_comm
             if isinstance(self.experts, list):
@@ -178,29 +199,28 @@ class FMoE(nn.Module):
                     mark_module_parallel_comm(e, comm)
             else:
                 mark_module_parallel_comm(self.experts, comm)
-        mark_module_parallel_comm(self.gate, 'world')
+        mark_module_parallel_comm(self.gate, "world")
 
     def forward(self, inp):
-        r'''
+        r"""
         The FMoE module first computes gate output, and then conduct MoE forward
         according to the gate.  The score of the selected gate given by the
         expert is multiplied to the experts' output tensors as a weight.
-        '''
+        """
         if self.mp_size > 1:
-            inp = Slice.apply(inp,
-                    self.mp_rank, self.mp_size, self.mp_group)
+            inp = Slice.apply(inp, self.mp_rank, self.mp_size, self.mp_group)
 
         gate_top_k_idx, gate_score = self.gate(inp)
         # to: (BxLxtop_k) x d_model
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
-        x = _fmoe_general_global_forward(inp, gate_top_k_idx, self.expert_fn,
-                self.num_expert, self.world_size)
+        x = _fmoe_general_global_forward(
+            inp, gate_top_k_idx, self.expert_fn, self.num_expert, self.world_size
+        )
         # to: (BxL) x top_k x d_model
         x = x.view(-1, self.top_k, self.d_model)
         # to: (BxL) x d_model
         x = torch.bmm(gate_score, x).reshape(-1, self.d_model)
 
         if self.mp_size > 1:
-            x = AllGather.apply(x,
-                    self.mp_rank, self.mp_size, self.mp_group)
+            x = AllGather.apply(x, self.mp_rank, self.mp_size, self.mp_group)
         return x

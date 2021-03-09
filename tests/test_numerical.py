@@ -68,7 +68,6 @@ class MyMoE(FMoE):
         super().__init__(
             num_expert=num_expert,
             d_model=d_model,
-
             gate=NaiveGate,
             world_size=world_size,
             mp_group=mp_group,
@@ -77,8 +76,8 @@ class MyMoE(FMoE):
         self.experts = _Expert(num_expert, d_model, d_hidden, activation)
 
         rng = np.random.default_rng(1234)
-        _megatron_init_method(self.experts.htoh4, rng, 1.)
-        _megatron_init_method(self.experts.h4toh, rng, 1.)
+        _megatron_init_method(self.experts.htoh4, rng, 1.0)
+        _megatron_init_method(self.experts.h4toh, rng, 1.0)
 
 
 @pytest.mark.parametrize("num_expert", [4, 8])
@@ -152,8 +151,22 @@ def test_fmoe_linear(
         moe, moe_raw, batch_size, d_model, top_k, rank, mp_group
     )
 
-    moe_out_list = moe_out, moe_grad_in, moe.experts.htoh4.weight.grad, moe.experts.h4toh.weight.grad, moe.experts.htoh4.bias.grad, moe.experts.h4toh.bias.grad
-    raw_out_list = raw_out, raw_grad_in, moe_raw.weight_htoh4.grad, moe_raw.weight_h4toh.grad, moe_raw.bias_htoh4.grad, moe_raw.bias_h4toh.grad
+    moe_out_list = (
+        moe_out,
+        moe_grad_in,
+        moe.experts.htoh4.weight.grad,
+        moe.experts.h4toh.weight.grad,
+        moe.experts.htoh4.bias.grad,
+        moe.experts.h4toh.bias.grad,
+    )
+    raw_out_list = (
+        raw_out,
+        raw_grad_in,
+        moe_raw.weight_htoh4.grad,
+        moe_raw.weight_h4toh.grad,
+        moe_raw.bias_htoh4.grad,
+        moe_raw.bias_h4toh.grad,
+    )
 
     if world_size > 1:
         _, __, htoh4_w_grad, h4toh_w_grad, htoh4_b_grad, h4toh_b_grad = raw_out_list
@@ -176,7 +189,14 @@ def test_fmoe_linear(
         )
         raw_out_list = _, __, htoh4_w_grad, h4toh_w_grad, htoh4_b_grad, h4toh_b_grad
 
-    names = ["output", "input grad", "htoh4 weight grad", "h4toh weight grad", "htoh4 bias grad", "h4toh bias grad"]
+    names = [
+        "output",
+        "input grad",
+        "htoh4 weight grad",
+        "h4toh weight grad",
+        "htoh4 bias grad",
+        "h4toh bias grad",
+    ]
 
     _assert_numercial(names, moe_out_list, raw_out_list, rank)
 
