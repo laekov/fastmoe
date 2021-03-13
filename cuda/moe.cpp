@@ -117,15 +117,29 @@ public:
 	ncclComm_t getcomm(at::Device dev) {
 		auto key = std::to_string(dev.index());
 #ifdef ENABLE_NCCL_P2P_SUPPORT
-		auto v = getNCCLComm(key, {dev}, c10d::OpType::ALLTOALL);
+		ncclUniqueId ncclID;
+		int rank = getRank();
+		if (rank == 0) {
+			ncclGetUniqueId(&ncclID);
+		}
+		broadcastUniqueNCCLID(&ncclID,
+				c10d::OpType::SEND,
+				"fastmoe_nccl_comm",
+				rank);
+		ncclComm_t comm;
+		ncclCommInitRank(&comm, getSize(), ncclID, rank);
+		return comm;
 #else
 		auto v = getNCCLComm(key, {dev});
-#endif
 		if (v.size() == 0) {
 			std::cerr << "PyTorch has nothing\n";
 			return 0;
 		}
+		int count;
+		ncclCommCount(v[0]->getNcclComm(), &count);
+		std::cerr << "PyTorch has " << v.size() << " comms, comm 0 size " << count << "\n";
 		return v[0]->getNcclComm();
+#endif
 	}
 };
 
