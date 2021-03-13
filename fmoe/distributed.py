@@ -47,7 +47,8 @@ class DistributedGroupedDataParallel(nn.Module):
         else:
             self.comms["world"] = world_group
 
-        def allreduce_params(no_scale=False, reduce_after=False, fp32_allreduce=False):
+        def allreduce_params(no_scale=False,
+                reduce_after=False, fp32_allreduce=False):
             groups = dict()
             for p in self.module.parameters():
                 if not p.requires_grad or p.grad is None:

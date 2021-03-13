@@ -114,7 +114,8 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
         fwd_batch_size,
     ) = moe_prepare_forward(gate, num_expert, world_size)
     x = MOEScatter.apply(
-        inp, pos, local_expert_count, global_expert_count, fwd_batch_size, world_size
+        inp, pos,
+        local_expert_count, global_expert_count, fwd_batch_size, world_size
     )
     x = expert_fn(x, fwd_expert_count)
     x = MOEGather.apply(
@@ -165,7 +166,8 @@ class FMoE(nn.Module):
         self.top_k = top_k
         self.gate = gate(d_model, num_expert, world_size, top_k)
         if expert is not None:
-            self.experts = nn.ModuleList([expert(d_model) for _ in range(num_expert)])
+            self.experts = nn.ModuleList([expert(d_model)
+                for _ in range(num_expert)])
             self.experts_fused = False
         else:
             self.experts_fused = True
