@@ -167,7 +167,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("expert_exchange", &moe_expert_exchange, "MoE expert exchange (CUDA)");
   m.def("global_scatter", &moe_global_scatter, "MoE global scatter (CUDA)");
   m.def("global_gather", &moe_global_gather, "MoE global gather (CUDA)");
-  m.def("global_fused_forward", &moe_global_fused_forward, 
+  m.def("global_fused_forward", &moe_global_fused_forward,
 		  "MoE global gather (CUDA)");
   m.def("ensure_nccl", &moe_ensure_nccl, "MoE ensure torch nccl comm");
 #endif

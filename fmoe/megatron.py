@@ -11,6 +11,8 @@ import torch.nn.functional as F
 
 from .transformer import FMoETransformerMLP
 from .distributed import DistributedGroupedDataParallel
+from .balance import update_balance_profile, reset_balance_profile
+from .utils import get_torch_default_comm
 
 
 class _FakeMegatronMLP(nn.Module):
@@ -69,22 +71,167 @@ def _random_init_weight(self, rng):
         self.bias.data = torch.from_numpy(bias).to(dtype=dtype, device=device)
 
 
+balance_dict = {}
+num_layers = 0
+
+
+def reset_gate_hook():
+    from megatron import get_args
+
+    global balance_dict, num_layers
+    reset_balance_profile(balance_dict, num_layers, get_args().balance_strategy)
+
+
+def get_balance_profile():
+    global balance_dict
+    return balance_dict
+
+
+def generate_megatron_gate_hook(layer_idx, num_expert_global):
+    from megatron import get_args
+
+    balance_strategy = get_args().balance_strategy
+
+    def megatron_gate_hook(gate_top_k_idx, gate_score_top_k, gate_state_dict):
+        global balance_dict
+        update_balance_profile(
+            balance_dict,
+            gate_top_k_idx,
+            gate_score_top_k,
+            gate_state_dict,
+            layer_idx,
+            num_expert_global,
+            balance_strategy,
+        )
+
+    return megatron_gate_hook
+
+
+def add_fmoe_args(parser):
+    group = parser.add_argument_group(title="fastmoe")
+
+    group.add_argument("--fmoefy", action="store_true")
+    group.add_argument("--num-experts", type=int, default=None)
+    group.add_argument("--top-k", type=int, default=2)
+    group.add_argument("--balance-loss-weight", type=float, default=1)
+    group.add_argument("--balance-strategy", type=str, default=None)
+
+    return parser
+
+
+def add_balance_log(writer, iteration):
+    from megatron import is_last_rank
+
+    balance_dict_tensor = torch.vstack(
+        [torch.tensor(item, device=item[0].device) for item in balance_dict.values()]
+    ).detach()
+    world_group = get_torch_default_comm()
+    world_size = torch.distributed.get_world_size(group=world_group)
+    torch.distributed.all_reduce(balance_dict_tensor, group=world_group)
+    balance_dict_tensor /= world_size
+
+    if writer and is_last_rank():
+        for idx, metric_name in enumerate(balance_dict):
+            for layer_id, val in enumerate(balance_dict_tensor[idx]):
+                writer.add_scalar(
+                    f"balance-{metric_name}/layer-{layer_id}", val.item(), iteration
+                )
+            writer.add_scalar(
+                f"balance-{metric_name}/all",
+                balance_dict_tensor[idx].mean().item(),
+                iteration,
+            )
+
+    reset_gate_hook()
+
+
+def patch_forward_step(forward_step_func):
+    r"""
+    Patch model's forward_step_func to support balance loss
+    """
+
+    from megatron.mpu import is_pipeline_last_stage
+    from megatron import get_args
+
+    if not get_args().balance_strategy:
+        return forward_step_func
+
+    def forward_step_with_balance_loss(data_iterator, model, input_tensor):
+        args = get_args()
+        output = forward_step_func(data_iterator, model, input_tensor)
+
+        if is_pipeline_last_stage():
+            loss_name = args.balance_strategy + "_loss"
+
+            (loss, state_dict), bal_loss = (
+                output,
+                (
+                    torch.tensor(
+                        balance_dict[loss_name],
+                        device=balance_dict[loss_name][0].device,
+                    ).mean()
+                    * args.balance_loss_weight
+                ).float(),
+            )
+
+            # avarage across world group
+            world_group = get_torch_default_comm()
+            world_size = torch.distributed.get_world_size(group=world_group)
+            averaged_bal_loss = bal_loss.clone().detach()
+            torch.distributed.all_reduce(averaged_bal_loss, group=world_group)
+            averaged_bal_loss /= world_size
+
+            loss += bal_loss
+            state_dict[loss_name] = averaged_bal_loss
+
+            return loss, state_dict
+        else:
+            return output
+
+    return forward_step_with_balance_loss
+
+
+def patch_model_provider(model_provider):
+    from megatron import get_args
+
+    def fmoefied_model_provider():
+        args = get_args()
+        return fmoefy(
+            model_provider(),
+            num_experts=args.num_experts,
+            hidden_hidden_size=4 * args.hidden_size // args.top_k,
+            top_k=args.top_k,
+        )
+
+    return fmoefied_model_provider
+
+
 class MegatronMLP(FMoETransformerMLP):
     r"""
     Make the FMoETransformerMLP layer that distributes experts across
     communication group `group` to replace the original MLP layer in Megatron.
     """
 
-    def __init__(self, args, group):
+    def __init__(self, args, group, layer_idx):
         assert (
-            args.seq_length * args.micro_batch_size
-            % args.tensor_model_parallel_size
+            args.seq_length * args.micro_batch_size % args.tensor_model_parallel_size
             == 0
         ), "Batch size x sequence length should be multiple of mp size"
         if not args.distributed_experts:
             world_size = 1
         else:
             world_size = args.world_size
+        gate = None
+        if not args.balance_strategy or args.balance_strategy == "gshard":
+            from .gates import NaiveGate
+
+            gate = NaiveGate
+        elif args.balance_strategy == "noisy":
+            from .gates import NoisyGate
+
+            gate = NoisyGate
+        else:
+            assert False, "Undefined balance strategy {}" % (args.balance_strategy)
         super().__init__(
             args.num_experts,
             top_k=args.top_k,
@@ -93,6 +240,10 @@ class MegatronMLP(FMoETransformerMLP):
             world_size=world_size,
             mp_group=group,
             expert_dp_comm="none" if args.distributed_experts else "dp",
+            gate_hook=generate_megatron_gate_hook(
+                layer_idx, args.num_experts * world_size
+            ),
+            gate=gate,
         )
         self.hidden_size = args.hidden_size
         if args.distributed_experts:
@@ -166,8 +317,14 @@ def fmoefy(
     if distributed_experts is not None:
         args.distributed_experts = distributed_experts
 
-    for l in model.language_model.transformer.layers:
-        l.mlp = MegatronMLP(args, mpu.get_model_parallel_group())
+    for idx, l in enumerate(model.language_model.transformer.layers):
+        l.mlp = MegatronMLP(args, mpu.get_model_parallel_group(), idx)
+
+    # initialize gate hook
+    global num_layers, balance_dict
+    num_layers = len(model.language_model.transformer.layers)
+    reset_gate_hook()
+
     return model
 
 
