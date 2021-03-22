@@ -40,7 +40,7 @@ class BruteForceMoE(nn.Module):
     def forward(self, inp):
         if self.pre_lnorm:
             inp = self.layer_norm(inp)
-        gate_top_k_idx, gate_score = self.gate(inp)
+        gate_top_k_idx, gate_score, _ = self.gate(inp)
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
         x = self.mlp(inp, gate_top_k_idx, gate_score)
         if not self.pre_lnorm:
