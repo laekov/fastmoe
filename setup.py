@@ -20,7 +20,7 @@ if __name__ == '__main__':
         author_email='hja20@mails.tsinghua.edu.cn',
         license='Apache-2',
         url='https://github.com/laekov/fastmoe',
-        packages=['fmoe'],
+        packages=['fmoe', 'fmoe.megatron'],
         ext_modules=[
             CUDAExtension(
                 name='fmoe_cuda', 
