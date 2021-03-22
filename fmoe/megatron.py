@@ -533,7 +533,6 @@ def merge_state_dict(state_dict_rank0, state_dict_local, fp16):
         for k, v in state_dict_local.items():
             # megatron uses both dict and OrderedDict in its state_dict
             if isinstance(v, (OrderedDict, dict)):
-                print_rank_last("[merge model] go recursively to {}".format(k))
                 merge_model(state_dict_rank0[k], v)
             else:
                 state_dict_rank0[k] = v
@@ -563,11 +562,6 @@ def merge_state_dict(state_dict_rank0, state_dict_local, fp16):
                     state_dict_rank0["optimizer"]["fp32_from_fp16_params"][group_idx][
                         param_in_group_idx
                     ] = param
-                    print_rank_last(
-                        "[merge fp32_from_fp16_params] copy parameter ({:d}, {:d})".format(
-                            group_idx, param_in_group_idx
-                        )
-                    )
 
     return state_dict_rank0
 
