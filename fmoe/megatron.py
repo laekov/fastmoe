@@ -96,13 +96,13 @@ def generate_megatron_gate_hook(layer_idx, num_expert_global):
 
     balance_strategy = get_args().balance_strategy
 
-    def megatron_gate_hook(gate_top_k_idx, gate_score_top_k, gate_state_dict):
+    def megatron_gate_hook(gate_top_k_idx, gate_score_top_k, gate_context):
         global balance_dict
         update_balance_profile(
             balance_dict,
             gate_top_k_idx,
             gate_score_top_k,
-            gate_state_dict,
+            gate_context,
             layer_idx,
             num_expert_global,
             balance_strategy,
