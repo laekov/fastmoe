@@ -1,3 +1,19 @@
+## v0.1.2
+
+### Compilation
+
+- Remove dependency on the CUDA examples repository.
+
+### Distributed
+
+- Fix a bug related to PyTorch v1.8.0. FastMoE can now operate on multiple GPUs
+on multiple nodes with PyTorch v1.8.0.
+
+### Misc
+
+- Fix tons of typos.
+- Format the code.
+
 ## v0.1.1
 
 ### Distributed

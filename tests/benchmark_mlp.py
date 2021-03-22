@@ -1,8 +1,8 @@
+import torch
+import torch.nn as nn
 from fmoe import FMoETransformerMLP
 from fmoe.gates import NaiveGate
 from moe import BruteForceMoELinear
-import torch
-import torch.nn as nn
 import time
 import sys
 import os

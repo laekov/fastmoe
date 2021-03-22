@@ -23,7 +23,8 @@ class ZeroGate(nn.Module):
         idx = torch.zeros(
             inp.shape[0] * self.top_k, dtype=torch.int64, device=inp.device
         )
-        score = torch.ones(inp.shape[0] * self.top_k, device=inp.device) / self.top_k
+        score = torch.ones(inp.shape[0] * self.top_k,
+                device=inp.device) / self.top_k
         return idx, score.reshape(-1, 1, self.top_k)
 
 

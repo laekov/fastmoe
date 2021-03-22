@@ -45,7 +45,7 @@ def _megatron_init_method(self, rng, sigma):
     device = self.weight.device
     dtype = self.weight.dtype
     weight = rng.normal(loc=0.0, scale=sigma, size=tuple(self.weight.size()))
-    self.weight.data = torch.tensor(weight, dtype=dtype, device=device)
+    self.weight.data = torch.from_numpy(weight).to(dtype=dtype, device=device)
 
     if self.bias is not None:
         # Always initialize bias to zero.
@@ -64,13 +64,13 @@ def _random_init_weight(self, rng):
     device = self.weight.device
     dtype = self.weight.dtype
     weight = rng.uniform(-bound, bound, size=tuple(self.weight.size()))
-    self.weight.data = torch.tensor(weight, dtype=dtype, device=device)
+    self.weight.data = torch.from_numpy(weight).to(dtype=dtype, device=device)
 
     if self.bias is not None:
         fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight[0])
         bound = 1 / math.sqrt(fan_in)
         bias = rng.uniform(-bound, bound, size=tuple(self.bias.size()))
-        self.bias.data = torch.tensor(bias, dtype=dtype, device=device)
+        self.bias.data = torch.from_numpy(bias).to(dtype=dtype, device=device)
 
 
 class MegatronMLP(FMoETransformerMLP):
@@ -81,7 +81,8 @@ class MegatronMLP(FMoETransformerMLP):
 
     def __init__(self, args, group):
         assert (
-            args.seq_length * args.micro_batch_size % args.tensor_model_parallel_size
+            args.seq_length * args.micro_batch_size
+            % args.tensor_model_parallel_size
             == 0
         ), "Batch size x sequence length should be multiple of mp size"
         if not args.distributed_experts:
