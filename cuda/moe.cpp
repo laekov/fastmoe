@@ -33,36 +33,54 @@ std::vector<torch::Tensor> moe_local_gather(
 }
 
 
+void merge_bias(torch::Tensor &input_buf, torch::Tensor &weight, at::optional<torch::Tensor> bias_o) {
+	torch::Tensor bias = bias_o.value();
+	
+	weight = at::cat({weight, bias.unsqueeze(2)}, 2); // [W b]
+	
+	auto options = torch::TensorOptions()
+		.device(input_buf.device())
+		.dtype(input_buf.dtype());
+	
+	auto ones = at::ones(input_buf.size(0), options).unsqueeze(1);
+	
+	input_buf = at::cat({input_buf, ones}, 1); // [X 1]
+}
+
 std::vector<torch::Tensor> moe_forward(
-        torch::Tensor input_buf,     // [batch_size x in_feat]
-        torch::Tensor weight,        // [num_expert x out_feat x in_feat]
-        torch::Tensor expert_count   // [batch_size]
+        torch::Tensor input_buf,     		// [batch_size x in_feat]
+		torch::Tensor expert_count,  		// [batch_size]
+        torch::Tensor weight,        		// [num_expert x out_feat x in_feat]
+		at::optional<torch::Tensor> bias_o  // [num_expert x out_feat] or None
         ) {
+
+	// Wx+b = [W b] [x]
+    //              [1]  
+	if (bias_o.has_value()) merge_bias(input_buf, weight, bias_o);
+
     CHECK_INPUT(input_buf);
     CHECK_INPUT(weight);
-    /*
-        The bias term should have been merged into weight. Note the following fact that 
-        Wx+b = [W b] [x]
-                     [1]  
-    */
-    return moe_cuda_forward(input_buf, weight, expert_count);
+
+	return moe_cuda_forward(input_buf, expert_count, weight);
 }
 
 std::vector<torch::Tensor> moe_backward(
-        torch::Tensor grad_output_buf, // [batch_size x out_feat]
-        torch::Tensor input_buf,       // [batch_size x out_feat]
-        torch::Tensor weight,          // [num_expert x out_feat x in_feat]
-        torch::Tensor expert_count
+        torch::Tensor grad_output_buf, 		// [batch_size x out_feat]
+        torch::Tensor input_buf,       		// [batch_size x in_feat]
+		torch::Tensor expert_count,
+        torch::Tensor weight,           	// [num_expert x out_feat x in_feat]
+		at::optional<torch::Tensor> bias_o  // [num_expert x out_feat] or None
         ) {
+	
+	// Wx+b = [W b] [x]
+    //              [1]  
+	if (bias_o.has_value()) merge_bias(input_buf, weight, bias_o);
+
     CHECK_INPUT(grad_output_buf);
     CHECK_INPUT(input_buf);
     CHECK_INPUT(weight);
-    /*
-        The bias term should have been merged into weight. Note the following fact that 
-        Wx+b = [W b] [x]
-                     [1]  
-    */
-    return moe_cuda_backward(grad_output_buf, input_buf, weight, expert_count);
+	
+    return moe_cuda_backward(grad_output_buf, input_buf, expert_count, weight, bias_o.has_value());
 }
 
 #ifdef MOE_USE_NCCL

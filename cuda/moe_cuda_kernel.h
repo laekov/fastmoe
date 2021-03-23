@@ -19,14 +19,15 @@ std::vector<torch::Tensor> moe_cuda_local_gather(
 
 std::vector<torch::Tensor> moe_cuda_forward(
     torch::Tensor input_buf,
-    torch::Tensor weight,
-	torch::Tensor expert_count);
+	torch::Tensor expert_count,
+    torch::Tensor weight);
 
 std::vector<torch::Tensor> moe_cuda_backward(
     torch::Tensor grad_output_buf,
     torch::Tensor input_buf,
+	torch::Tensor expert_count,
     torch::Tensor weight,
-	torch::Tensor expert_count);
+	bool has_bias);
 
 #ifdef MOE_USE_NCCL
 
