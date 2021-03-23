@@ -41,7 +41,7 @@ class FMoELinear(nn.Module):
         r"""
         Call MOE function
         """
-        x = MOELinear.apply(inp, self.weight, fwd_expert_count)
+        x = MOELinear.apply(inp, fwd_expert_count, self.weight)
         if self.bias is not None:
             # TODO: torch.repeat_interleave seems have numerical
             # instability in backward, leading to incorrect
