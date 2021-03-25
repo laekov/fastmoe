@@ -99,6 +99,20 @@ FastMoE's model parallel requires sophiscated parallel strategies that neither P
 Megatron-LM provides. The `fmoe.DistributedGroupedDataParallel` module is
 introduced to replace PyTorch's DDP module.
 
+## Citation
+
+```
+@misc{he2021fastmoe,
+      title={FastMoE: A Fast Mixture-of-Expert Training System}, 
+      author={Jiaao He and Jiezhong Qiu and Aohan Zeng and Zhilin Yang and
+Jidong Zhai and Jie Tang},
+      year={2021},
+      eprint={2103.13262},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+```
+
 ## Troubleshootings / Discussion
 
 If you have any problem using FastMoE, or you are interested in getting involved in developing FastMoE, feel free to join the [our slack channel](https://join.slack.com/t/fastmoe/shared_invite/zt-mz0ai6ol-ggov75D62YsgHfzShw8KYw).
