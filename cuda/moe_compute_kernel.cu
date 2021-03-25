@@ -118,11 +118,12 @@ void moe_cuda_forward_impl(
         const scalar_t* weight,
 		const long* expert_count,
         scalar_t* output_buf,
+		const bool has_bias,
         const size_t in_feat,
         const size_t out_feat,
         const size_t num_expert,
 		CudaStreamManager* smgr) {
-	scalar_t alpha = 1, beta = 0; 
+	scalar_t alpha = 1, beta = has_bias ? 1 : 0; 
 
 	for (int i = 0, ptr = 0; i < num_expert; ++i) {
 		if (expert_count[i] == 0) {
@@ -154,6 +155,8 @@ void moe_cuda_backward_impl(
 		const long* expert_count,
         scalar_t* grad_input_buf,
         scalar_t* grad_weight,
+		scalar_t* grad_bias,
+		const bool has_bias,
         const size_t batch_size,
         const size_t in_feat,
         const size_t out_feat,
@@ -194,6 +197,10 @@ void moe_cuda_backward_impl(
 				&beta,
 				grad_weight + i * in_feat * out_feat, in_feat
 				));
+		
+		if (has_bias) {
+			// call bias kernel here
+		}
 
 		ptr += expert_count[i];
 	}
@@ -276,7 +283,8 @@ std::vector<torch::Tensor> moe_cuda_local_gather(
 std::vector<torch::Tensor> moe_cuda_forward(
         torch::Tensor input_buf,
 		torch::Tensor expert_count,
-        torch::Tensor weight
+        torch::Tensor weight,
+		at::optional<torch::Tensor> bias
 		) {
 	auto smgr = getCudaStreamManager(input_buf.device().index());
 	const auto batch_size = input_buf.size(0);
@@ -288,11 +296,18 @@ std::vector<torch::Tensor> moe_cuda_forward(
     printf("[forward] expert=%ld, in_feat (d_model)=%ld, out_feat (d_ffn)=%ld\n", 
 			num_expert, in_feat, out_feat);
 #endif
-	auto out_options = torch::TensorOptions()
-		.device(input_buf.device())
-		.dtype(input_buf.dtype());
-    auto output = torch::empty({batch_size, out_feat}, out_options);
+
+    torch::Tensor output;
     
+	if (bias.has_value()) {
+		output = bias.value().repeat_interleave(expert_count.to(bias.value().device()), 0);
+	} else{
+		auto out_options = torch::TensorOptions()
+			.device(input_buf.device())
+			.dtype(input_buf.dtype());
+		output = torch::empty({batch_size, out_feat}, out_options);
+	}
+		
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), "moe_forward_cuda", 
 			([&] {
 		moe_cuda_forward_impl<scalar_t>(
@@ -300,6 +315,7 @@ std::vector<torch::Tensor> moe_cuda_forward(
 			weight.data_ptr<scalar_t>(),
 			expert_count.data_ptr<long>(),
 			output.data_ptr<scalar_t>(),
+			bias.has_value(),
 			in_feat,
 			out_feat,
 			num_expert,
@@ -315,7 +331,7 @@ std::vector<torch::Tensor> moe_cuda_backward(
     torch::Tensor input_buf, 		// [batch_size x out_feat]
 	torch::Tensor expert_count,
     torch::Tensor weight, 			// [num_expert x out_feat x in_feat]
-	bool has_bias 			
+	at::optional<torch::Tensor> bias
 ) {
 	auto smgr = getCudaStreamManager(input_buf.device().index());
     const auto batch_size = input_buf.size(0);
@@ -331,6 +347,7 @@ std::vector<torch::Tensor> moe_cuda_backward(
 
     auto grad_input_buf = grad_output_buf.new_empty({batch_size, in_feat}); 
     auto grad_weight = grad_output_buf.new_empty({num_expert, out_feat, in_feat});
+	auto grad_bias = grad_output_buf.new_empty({num_expert, out_feat});
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), "moe_cuda_backward", ([&] {
         moe_cuda_backward_impl<scalar_t>(
@@ -340,6 +357,8 @@ std::vector<torch::Tensor> moe_cuda_backward(
 			expert_count.data_ptr<long>(),
             grad_input_buf.data_ptr<scalar_t>(),
             grad_weight.data_ptr<scalar_t>(),
+			grad_bias.data_ptr<scalar_t>(),
+			bias.has_value(),
             batch_size,
             in_feat,
             out_feat,
@@ -348,17 +367,5 @@ std::vector<torch::Tensor> moe_cuda_backward(
         );
     }));
 
-	if (!has_bias) return {grad_input_buf, grad_weight, torch::empty({num_expert,out_feat})};
-
-	// weight and input have been concatenated. need to split the grads back
-	// and separate them into input, weight, bias
-	torch::Tensor grad_orig_input_buf = at::narrow(grad_input_buf, -1, 0, in_feat - 1).contiguous();
-
-	// bias is also squeezed in the new added dimension
-	torch::Tensor grad_orig_bias = at::narrow(grad_weight, -1, in_feat - 1, 1).squeeze(2).contiguous();
-	torch::Tensor grad_orig_weight = at::narrow(grad_weight, -1, 0, in_feat - 1).contiguous();
-	
-	return {grad_orig_input_buf, grad_orig_weight, grad_orig_bias};
-
-
+	return {grad_input_buf, grad_weight, grad_bias};
 }
