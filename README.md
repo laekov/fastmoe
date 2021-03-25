@@ -104,8 +104,7 @@ introduced to replace PyTorch's DDP module.
 ```
 @article{he2021fastmoe,
       title={FastMoE: A Fast Mixture-of-Expert Training System}, 
-      author={Jiaao He and Jiezhong Qiu and Aohan Zeng and Zhilin Yang and
-Jidong Zhai and Jie Tang},
+      author={Jiaao He and Jiezhong Qiu and Aohan Zeng and Zhilin Yang and Jidong Zhai and Jie Tang},
       journal={arXiv preprint arXiv:2103.13262},
       year={2021}
 }
