@@ -12,7 +12,7 @@ from fmoe.gates import NaiveGate
 from fmoe.layers import FMoE
 from fmoe.transformer import _Expert
 from fmoe.distributed import DistributedGroupedDataParallel as LocalDDP
-from fmoe.megatron import _megatron_init_method
+from fmoe.megatron.layers import _megatron_init_method
 from moe import BruteForceMoELinear, BruteForceMoE, NaiveExpert, LinearExpert
 
 
