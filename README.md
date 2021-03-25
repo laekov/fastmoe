@@ -102,14 +102,12 @@ introduced to replace PyTorch's DDP module.
 ## Citation
 
 ```
-@misc{he2021fastmoe,
+@article{he2021fastmoe,
       title={FastMoE: A Fast Mixture-of-Expert Training System}, 
       author={Jiaao He and Jiezhong Qiu and Aohan Zeng and Zhilin Yang and
 Jidong Zhai and Jie Tang},
-      year={2021},
-      eprint={2103.13262},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+      journal={arXiv preprint arXiv:2103.13262},
+      year={2021}
 }
 ```
 
