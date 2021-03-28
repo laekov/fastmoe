@@ -87,8 +87,8 @@ std::vector<torch::Tensor> moe_global_scatter(
         size_t batch_size, size_t n_workers) {
     CHECK_INPUT(input_buf);
     return moe_cuda_global_scatter(input_buf,
-               local_expert_count, global_expert_count,
-            batch_size, n_workers);
+                local_expert_count, global_expert_count,
+                batch_size, n_workers);
 }
 
 std::vector<torch::Tensor> moe_global_gather(
@@ -98,8 +98,8 @@ std::vector<torch::Tensor> moe_global_gather(
         size_t batch_size, size_t n_workers) {
     CHECK_INPUT(output_buf);
     return moe_cuda_global_gather(output_buf,
-               local_expert_count, global_expert_count,
-            batch_size, n_workers);
+                local_expert_count, global_expert_count,
+                batch_size, n_workers);
 }
 
 
