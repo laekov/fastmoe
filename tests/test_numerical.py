@@ -12,7 +12,7 @@ from fmoe.gates import NaiveGate
 from fmoe.layers import FMoE
 from fmoe.transformer import _Expert
 from fmoe.distributed import DistributedGroupedDataParallel as LocalDDP
-from fmoe.megatron import _megatron_init_method
+from fmoe.megatron.layers import _megatron_init_method
 from moe import BruteForceMoELinear, BruteForceMoE, NaiveExpert, LinearExpert
 
 
@@ -38,7 +38,7 @@ def _perform_forward(
     inp.requires_grad = True
 
     inp_raw.requires_grad = True
-    gate_idx, gate_score = moe.gate(inp_raw)
+    gate_idx, gate_score, _ = moe.gate(inp_raw)
     inp_repeated = inp_raw.repeat_interleave(repeats=top_k, dim=0)
     moe_out = moe(inp)
     raw_out = moe_raw(inp_repeated, gate_idx, gate_score)

@@ -1,7 +1,5 @@
 r"""
-The adaptor to seamlessly enable FastMoE in Megatron-LM v2.0 with at most two
-lines of modification.
-See `examples/megatron` for usage instructions.
+nn modules to replace Megatron's native ones
 """
 import math
 import numpy as np
@@ -9,8 +7,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .transformer import FMoETransformerMLP
-from .distributed import DistributedGroupedDataParallel
+from fmoe.transformer import FMoETransformerMLP
+from .balance import reset_gate_hook
+from .balance import generate_megatron_gate_hook
 
 
 class _FakeMegatronMLP(nn.Module):
@@ -75,16 +74,26 @@ class MegatronMLP(FMoETransformerMLP):
     communication group `group` to replace the original MLP layer in Megatron.
     """
 
-    def __init__(self, args, group):
+    def __init__(self, args, group, layer_idx):
         assert (
-            args.seq_length * args.micro_batch_size
-            % args.tensor_model_parallel_size
+            args.seq_length * args.micro_batch_size % args.tensor_model_parallel_size
             == 0
         ), "Batch size x sequence length should be multiple of mp size"
         if not args.distributed_experts:
             world_size = 1
         else:
             world_size = args.world_size
+        gate = None
+        if not args.balance_strategy or args.balance_strategy == "gshard":
+            from fmoe.gates import NaiveGate
+
+            gate = NaiveGate
+        elif args.balance_strategy == "noisy":
+            from fmoe.gates import NoisyGate
+
+            gate = NoisyGate
+        else:
+            assert False, "Undefined balance strategy {}" % (args.balance_strategy)
         super().__init__(
             args.num_experts,
             top_k=args.top_k,
@@ -93,6 +102,10 @@ class MegatronMLP(FMoETransformerMLP):
             world_size=world_size,
             mp_group=group,
             expert_dp_comm="none" if args.distributed_experts else "dp",
+            gate_hook=generate_megatron_gate_hook(
+                layer_idx, args.num_experts * world_size
+            ),
+            gate=gate,
         )
         self.hidden_size = args.hidden_size
         if args.distributed_experts:
@@ -166,41 +179,11 @@ def fmoefy(
     if distributed_experts is not None:
         args.distributed_experts = distributed_experts
 
-    for l in model.language_model.transformer.layers:
-        l.mlp = MegatronMLP(args, mpu.get_model_parallel_group())
+    for idx, l in enumerate(model.language_model.transformer.layers):
+        l.mlp = MegatronMLP(args, mpu.get_model_parallel_group(), idx)
+
+    # initialize gate hook
+    num_layers = len(model.language_model.transformer.layers)
+    reset_gate_hook(num_layers)
+
     return model
-
-
-class DistributedDataParallel(DistributedGroupedDataParallel):
-    r"""
-    A wrapper that is used to replace the DDP module provided by Megatron, which
-    is adapted to enable the sophiscated parallel and reduction strategies in
-    Fast MoE.
-    """
-
-    def __init__(self, module):
-        from megatron import mpu
-
-        super().__init__(
-            module,
-            mp_group=mpu.get_model_parallel_group(),
-            dp_group=mpu.get_data_parallel_group(),
-        )
-
-    def state_dict(self, *args, **kwargs):
-        r"""
-        Keep consitency with Megatron
-        """
-        return self.module.state_dict(*args, **kwargs)
-
-    def state_dict_for_save_checkpoint(self, *args, **kwargs):
-        r"""
-        Keep consitency with Megatron
-        """
-        return self.module.state_dict_for_save_checkpoint(*args, **kwargs)
-
-    def load_state_dict(self, *args, **kwargs):
-        r"""
-        Keep consitency with Megatron
-        """
-        return self.module.load_state_dict(*args, **kwargs)

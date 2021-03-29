@@ -121,6 +121,7 @@ class FMoE(nn.Module):
         top_k=2,
         gate=NaiveGate,
         expert=None,
+        gate_hook=None,
     ):
         super().__init__()
         self.num_expert = num_expert
@@ -141,6 +142,7 @@ class FMoE(nn.Module):
             self.experts_fused = False
         else:
             self.experts_fused = True
+        self.gate_hook = gate_hook
 
     def expert_fn(self, inp, fwd_expert_count):
         r"""
@@ -182,7 +184,9 @@ class FMoE(nn.Module):
         if self.mp_size > 1:
             inp = Slice.apply(inp, self.mp_rank, self.mp_size, self.mp_group)
 
-        gate_top_k_idx, gate_score = self.gate(inp)
+        gate_top_k_idx, gate_score, gate_state_dict = self.gate(inp)
+        if self.gate_hook:
+            self.gate_hook(gate_top_k_idx, gate_score, gate_state_dict)
         # to: (BxLxtop_k) x d_model
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
         x = _fmoe_general_global_forward(
