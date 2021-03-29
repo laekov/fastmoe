@@ -1,4 +1,4 @@
-FastMoE currently works with both `v2.0` and `v2.1` release of
+FastMoE currently works with `v2.2` release of
 [Megatron-LM](https://github.com/nvidia/megatron-lm).
 
 Patches which you can find in this directory are used to easily enable MoE in
