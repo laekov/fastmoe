@@ -214,10 +214,10 @@ class FMoE(nn.Module):
         if self.mp_size > 1:
             inp = Slice.apply(inp, self.mp_rank, self.mp_size, self.mp_group)
 
-        gate_top_k_idx, gate_score, gate_state_dict = self.gate(inp)
-        if self.gate_hook:
-            self.gate_hook(gate_top_k_idx, gate_score, gate_state_dict)
+        gate_top_k_idx, gate_score = self.gate(inp)
+
         # to: (BxLxtop_k) x d_model
+        # TODO: remove repeat_interleave
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
         x = _fmoe_general_global_forward(
             inp, gate_top_k_idx, self.expert_fn, self.num_expert, self.world_size
