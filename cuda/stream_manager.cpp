@@ -24,7 +24,7 @@ void CudaStreamManager::sync(int idx) {
 }
 
 void CudaStreamManager::setup(const int device) {
-#ifdef MOE_USE_NCCL
+#ifdef FMOE_USE_NCCL
     this->ncclgood = 0;
 #endif
     this->device = device;
