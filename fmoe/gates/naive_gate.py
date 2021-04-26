@@ -19,7 +19,7 @@ class NaiveGate(BaseGate):
     """
 
     def __init__(self, d_model, num_expert, world_size, top_k=2):
-        super().__init__()
+        super().__init__(num_expert, world_size)
         self.gate = nn.Linear(d_model, self.tot_expert)
         self.top_k = top_k
 
@@ -38,5 +38,6 @@ class NaiveGate(BaseGate):
         gate_score = F.softmax(gate_top_k_val, dim=-1).unsqueeze(1)
         gate_top_k_idx = gate_top_k_idx.view(-1)  # (BxLxtop_k)
 
-        return gate_top_k_idx, gate_score
+        # TODO: capacity
 
+        return gate_top_k_idx, gate_score
