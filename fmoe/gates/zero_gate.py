@@ -27,7 +27,4 @@ class ZeroGate(BaseGate):
         gate_score = (
             torch.ones(inp.shape[0] * self.top_k, device=inp.device) / self.top_k
         )
-        gate_score_all = torch.zeros(inp.shape[0], self.num_expert, device=inp.device)
-        gate_score_all[:, 0] = 1
-        return idx, gate_score.reshape(-1, 1, self.top_k), gate_score_all
-
+        return idx, gate_score.reshape(-1, 1, self.top_k)
