@@ -111,7 +111,7 @@ class MOELinear(Function):
 
     @staticmethod
     def forward(ctx, global_input_buf, weight, fwd_expert_count):
-        (global_output_buf,) = fmoe_cuda.forward(
+        (global_output_buf,) = fmoe_cuda.linear_forward(
             global_input_buf, weight, fwd_expert_count
         )
         variables = (global_input_buf, weight, fwd_expert_count)
@@ -121,7 +121,7 @@ class MOELinear(Function):
     @staticmethod
     def backward(ctx, grad_out):
         (input_buf, weight, fwd_expert_count) = ctx.saved_tensors
-        grad_inp_buf, grad_weight = fmoe_cuda.backward(
+        grad_inp_buf, grad_weight = fmoe_cuda.linear_backward(
             grad_out, input_buf, weight, fwd_expert_count
         )
         return grad_inp_buf, grad_weight, None
