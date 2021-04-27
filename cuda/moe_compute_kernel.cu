@@ -45,7 +45,12 @@ template <typename scalar_t>
 __global__ 
 void column_reduce(const scalar_t * matrix, scalar_t * result, 
     int m /* lines */, int n /* columns*/) {
-    extern __shared__ float sdata[];
+    
+    // https://stackoverflow.com/questions/27570552/templated-cuda-kernel-with-dynamic-shared-memory
+    extern __shared__ __align__(sizeof(scalar_t)) unsigned char my_smem[];
+    scalar_t *sdata = reinterpret_cast<scalar_t *>(my_smem);
+
+    
     unsigned int tid = threadIdx.x + threadIdx.y * blockDim.x; // line
     unsigned int i = threadIdx.x * n + threadIdx.y + blockIdx.y * blockDim.y; // get to idx th line
     unsigned int offset = 0;
