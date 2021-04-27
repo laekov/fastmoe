@@ -2,6 +2,7 @@
 #include <vector>
 #include <torch/extension.h>
 
+// global_exchange
 #ifdef FMOE_USE_NCCL
 #include <c10d/ProcessGroupNCCL.hpp>
 std::vector<torch::Tensor> _expert_exchange(
@@ -20,6 +21,7 @@ std::vector<torch::Tensor> _global_gather(
 void _ensure_nccl(c10d::ProcessGroupNCCL& p, torch::Tensor t);
 #endif  // FMOE_USE_NCCL
 
+// local_exchange
 std::vector<torch::Tensor> _expert_count(
         torch::Tensor gate, 
         size_t num_expert);
@@ -30,15 +32,21 @@ std::vector<torch::Tensor> _local_gather(
     torch::Tensor output_buf,
     torch::Tensor pos);
 
+// parallel_linear
 std::vector<torch::Tensor> _linear_forward(
         torch::Tensor input_buf,
         torch::Tensor weight,
         torch::Tensor expert_count);
 std::vector<torch::Tensor> _linear_backward(
-    torch::Tensor grad_output_buf, // [batch_size x out_feat]
-    torch::Tensor input_buf, // [batch_size x out_feat]
-    torch::Tensor weight, // [num_expert x out_feat x in_feat]
+    torch::Tensor grad_output_buf,
+    torch::Tensor input_buf,
+    torch::Tensor weight, 
     torch::Tensor expert_count);
+
+// balancing
+std::vector<torch::Tensor> _limit_by_capacity(
+		torch::Tensor expert_count, torch::Tensor capacity,
+		long n_expert, long n_experts) {
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef FMOE_USE_NCCL
@@ -54,4 +62,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
     m.def("linear_forward", &_linear_forward, "FastMoE forward (CUDA)");
     m.def("linear_backward", &_linear_backward, "FastMoE backward (CUDA)");
+
+	m.def("limit_by_capacity", &_limit_by_capacity, "FastMoE limit experts by capacity(CUDA)");
 }
