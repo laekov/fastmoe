@@ -4,7 +4,7 @@ Layers that FMoE provides to users
 import torch
 import torch.nn as nn
 
-from .functions import moe_prepare_forward
+from .functions import prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
 from .functions import AllGather, Slice
 from .gates import NaiveGate
@@ -112,7 +112,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
         global_expert_count,
         fwd_expert_count,
         fwd_batch_size,
-    ) = moe_prepare_forward(gate, num_expert, world_size)
+    ) = prepare_forward(gate, num_expert, world_size)
     x = MOEScatter.apply(
         inp, pos,
         local_expert_count, global_expert_count, fwd_batch_size, world_size
