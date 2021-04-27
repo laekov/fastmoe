@@ -7,14 +7,14 @@
 
 std::vector<torch::Tensor> _expert_exchange(
         torch::Tensor local_expert_count,
-        long num_expert, long n_workers) {
+        long n_expert, long n_workers) {
     auto global_expert_count = torch::empty_like(local_expert_count);
     auto smgr = getCudaStreamManager(local_expert_count.device().index());
 
     fmoe_cuda_expert_exchange_impl(
             local_expert_count.data_ptr<long>(),
             global_expert_count.data_ptr<long>(),
-            num_expert, n_workers,
+            n_expert, n_workers,
             smgr);
     return {global_expert_count};
 }
@@ -26,7 +26,7 @@ std::vector<torch::Tensor> _global_scatter(
         long batch_size, long n_workers) {
     CHECK_INPUT(input_buf);
 
-    auto num_expert = local_expert_count.size(0) / n_workers;
+    auto n_expert = local_expert_count.size(0) / n_workers;
     auto in_feat = input_buf.size(1);
     auto global_input_buf = input_buf.new_empty({batch_size, in_feat});
     auto smgr = getCudaStreamManager(input_buf.device().index());
@@ -38,7 +38,7 @@ std::vector<torch::Tensor> _global_scatter(
             local_expert_count.data_ptr<long>(),
             global_expert_count.data_ptr<long>(),
             global_input_buf.data_ptr<scalar_t>(),
-            in_feat, num_expert, n_workers,
+            in_feat, n_expert, n_workers,
             smgr
         );
     }));
@@ -52,7 +52,7 @@ std::vector<torch::Tensor> _global_gather(
         long batch_size, long n_workers) {
     CHECK_INPUT(output_buf);
 
-    auto num_expert = local_expert_count.size(0) / n_workers;
+    auto n_expert = local_expert_count.size(0) / n_workers;
     auto out_feat = output_buf.size(1);
     auto local_output_buf = output_buf.new_empty({batch_size, out_feat});
     auto smgr = getCudaStreamManager(output_buf.device().index());
@@ -64,7 +64,7 @@ std::vector<torch::Tensor> _global_gather(
             local_expert_count.data_ptr<long>(),
             global_expert_count.data_ptr<long>(),
             local_output_buf.data_ptr<scalar_t>(),
-            out_feat, num_expert, n_workers,
+            out_feat, n_expert, n_workers,
             smgr
         );
     }));
