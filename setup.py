@@ -27,6 +27,7 @@ if __name__ == '__main__':
                 sources=[
                     'cuda/stream_manager.cpp',
                     'cuda/local_exchange.cu',
+                    'cuda/balancing.cu',
                     'cuda/global_exchange.cpp',
                     'cuda/parallel_linear.cpp',
                     'cuda/fmoe_cuda.cpp',

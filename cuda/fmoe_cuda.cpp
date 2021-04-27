@@ -45,8 +45,11 @@ std::vector<torch::Tensor> _linear_backward(
 
 // balancing
 std::vector<torch::Tensor> _limit_by_capacity(
-		torch::Tensor expert_count, torch::Tensor capacity,
-		long n_expert, long n_experts) {
+        torch::Tensor expert_count, torch::Tensor capacity,
+        long n_expert, long n_experts);
+void _prune_gate_by_capacity(
+        torch::Tensor gate_idx, torch::Tensor expert_count,
+        long n_expert, long n_worker);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef FMOE_USE_NCCL
@@ -63,5 +66,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("linear_forward", &_linear_forward, "FastMoE forward (CUDA)");
     m.def("linear_backward", &_linear_backward, "FastMoE backward (CUDA)");
 
-	m.def("limit_by_capacity", &_limit_by_capacity, "FastMoE limit experts by capacity(CUDA)");
+    m.def("limit_by_capacity", &_limit_by_capacity, "FastMoE limit experts by capacity(CUDA)");
+    m.def("prune_gate_by_capacity", &_prune_gate_by_capacity, "FastMoE prune gate by capacity(CUDA)");
 }

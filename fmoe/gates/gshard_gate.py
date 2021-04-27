@@ -34,13 +34,15 @@ class GShardGate(NaiveGate):
         capacity *= math.ceil(cap_rate * x.shape[0])
 
         pos, lec, gec = count_by_gate(gate, self.num_expert, self.world_size)
-        new_gec = fmoe_native.limit_by_capacity(gec, capacity,
+        new_gec, = fmoe_native.limit_by_capacity(gec, capacity,
                 self.num_expert, self.world_size)
         if self.world_size > 1:
             new_lec = fmoe_native.expert_exchange(new_gec, 
                     self.num_expert, self.world_size)
         else:
             new_lec = new_gec
-        # TODO: re-assign gate
+
+        fmoe_native.prune_gate_by_capacity(topk_idx,
+                new_lec.to(torch.int32), self.num_expert, self.world_size)
 
         return topk_idx, topk_val
