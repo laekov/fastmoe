@@ -10,7 +10,27 @@ import fmoe_cuda
 from .utils import get_torch_default_comm
 
 
-def moe_prepare_forward(gate, num_expert, world_size, comm=None):
+def count_by_gate(gate, num_expert, world_size, comm):
+    # TODO: support -1 in gate, which means ignore this input
+    with torch.no_grad():
+        _, pos = torch.sort(gate)
+        gate_idx, gate_count = torch.unique(gate, return_counts=True)
+        local_expert_count = torch.zeros(
+            num_expert * world_size, device=gate.device, dtype=torch.long
+        )
+        local_expert_count.index_put_((gate_idx.long(),), gate_count)
+
+        if world_size > 1:
+            (global_expert_count,) = fmoe_cuda.expert_exchange(
+                local_expert_count, num_expert, world_size
+            )
+        else:
+            global_expert_count = local_expert_count
+    return pos, local_expert_count, global_expert_count
+
+
+
+def prepare_forward(gate, num_expert, world_size, comm=None):
     r"""
     Prepare necessary information from gate output for MoE computation.
 
@@ -26,20 +46,9 @@ def moe_prepare_forward(gate, num_expert, world_size, comm=None):
             comm = get_torch_default_comm()
         fmoe_cuda.ensure_nccl(comm, gate)
 
+    pos, local_expert_count, global_expert_count = count_by_gate(gate, 
+            num_expert, world_size)
     with torch.no_grad():
-        _, pos = torch.sort(gate)
-        gate_idx, gate_count = torch.unique(gate, return_counts=True)
-        local_expert_count = torch.zeros(
-            num_expert * world_size, device=gate.device, dtype=torch.long
-        )
-        local_expert_count.index_put_((gate_idx.long(),), gate_count)
-
-        if world_size > 1:
-            (global_expert_count,) = fmoe_cuda.expert_exchange(
-                local_expert_count, num_expert, world_size
-            )
-        else:
-            global_expert_count = local_expert_count
         fwd_expert_count = global_expert_count.view(world_size,
                 num_expert).sum(dim=0)
         fwd_batch_size = int(fwd_expert_count.sum().item())
@@ -111,7 +120,7 @@ class MOELinear(Function):
 
     @staticmethod
     def forward(ctx, global_input_buf, weight, fwd_expert_count):
-        (global_output_buf,) = fmoe_cuda.forward(
+        (global_output_buf,) = fmoe_cuda.linear_forward(
             global_input_buf, weight, fwd_expert_count
         )
         variables = (global_input_buf, weight, fwd_expert_count)
@@ -121,7 +130,7 @@ class MOELinear(Function):
     @staticmethod
     def backward(ctx, grad_out):
         (input_buf, weight, fwd_expert_count) = ctx.saved_tensors
-        grad_inp_buf, grad_weight = fmoe_cuda.backward(
+        grad_inp_buf, grad_weight = fmoe_cuda.linear_backward(
             grad_out, input_buf, weight, fwd_expert_count
         )
         return grad_inp_buf, grad_weight, None

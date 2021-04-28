@@ -12,7 +12,7 @@ class ConstantGate(torch.nn.Module):
         idx = torch.zeros((inp.shape[0] * self.top_k,), dtype=torch.int64,
                 device=inp.device)
         score = torch.ones((inp.shape[0], 1, self.top_k), device=inp.device) / 2
-        return idx, score, None
+        return idx, score
 
 
 def test_zero_fwd(num_expert=2, batch_size=4, d_hidden=8, world_size=1):

@@ -4,7 +4,7 @@ Layers that FMoE provides to users
 import torch
 import torch.nn as nn
 
-from .functions import moe_prepare_forward
+from .functions import prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
 from .functions import AllGather, Slice
 from .gates import NaiveGate
@@ -112,7 +112,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
         global_expert_count,
         fwd_expert_count,
         fwd_batch_size,
-    ) = moe_prepare_forward(gate, num_expert, world_size)
+    ) = prepare_forward(gate, num_expert, world_size)
     x = MOEScatter.apply(
         inp, pos,
         local_expert_count, global_expert_count, fwd_batch_size, world_size
@@ -214,10 +214,10 @@ class FMoE(nn.Module):
         if self.mp_size > 1:
             inp = Slice.apply(inp, self.mp_rank, self.mp_size, self.mp_group)
 
-        gate_top_k_idx, gate_score, gate_state_dict = self.gate(inp)
-        if self.gate_hook:
-            self.gate_hook(gate_top_k_idx, gate_score, gate_state_dict)
+        gate_top_k_idx, gate_score = self.gate(inp)
+
         # to: (BxLxtop_k) x d_model
+        # TODO: remove repeat_interleave
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
         x = _fmoe_general_global_forward(
             inp, gate_top_k_idx, self.expert_fn, self.num_expert, self.world_size
