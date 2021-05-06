@@ -41,37 +41,7 @@ class FMoELinear(nn.Module):
         r"""
         Call MOE function
         """
-        x = MOELinear.apply(inp, self.weight, fwd_expert_count)
-        if self.bias is not None:
-            # TODO: torch.repeat_interleave seems have numerical
-            # instability in backward, leading to incorrect
-            # gradient computation for solution 1 and 2.
-            # Solution 3 uses a for-loop to expand the bias,
-            # but is 50% slower.
-            # This part should finally goes to MOELinear.apply,
-            # like MOELinear.apply(x, weight, bias, count)
-
-            # Solution 1
-            bias = torch.repeat_interleave(
-                self.bias, fwd_expert_count.to(self.bias.device), dim=0
-            )
-
-            # Solution 2
-            # bias_idx = torch.arange(self.num_expert)\
-            #     .repeat_interleave(fwd_expert_count)
-            # bias = self.bias[bias_idx]
-
-            # Solution 3
-            # bias = []
-            # for i in range(self.num_expert):
-            #    if fwd_expert_count[i] > 0:
-            #        bias.append(
-            #            self.bias[i].unsqueeze(0).expand(
-            #                fwd_expert_count[i], -1
-            #            )
-            #        )
-            # bias = torch.cat(bias, dim=0)
-            x = x + bias
+        x = MOELinear.apply(inp, fwd_expert_count, self.weight, self.bias)
         return x
 
     def extra_repr(self) -> str:
