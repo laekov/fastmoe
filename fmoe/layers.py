@@ -225,6 +225,7 @@ class FMoE(nn.Module):
         # to: (BxL) x top_k x d_model
         x = x.view(-1, self.top_k, self.d_model)
         # to: (BxL) x d_model
+        gate_score = gate_score.unsqueeze(1)
         x = torch.bmm(gate_score, x).reshape(-1, self.d_model)
 
         if self.mp_size > 1:

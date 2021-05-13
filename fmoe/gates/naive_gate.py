@@ -23,7 +23,7 @@ class NaiveGate(BaseGate):
         self.gate = nn.Linear(d_model, self.tot_expert)
         self.top_k = top_k
 
-    def forward(self, inp):
+    def forward(self, inp, return_all_scores=False):
         r"""
         The naive implementation simply calculates the top-k of a linear layer's
         output.
@@ -38,4 +38,6 @@ class NaiveGate(BaseGate):
         gate_score = F.softmax(gate_top_k_val, dim=-1)
         gate_top_k_idx = gate_top_k_idx.view(-1)  # (BxLxtop_k)
 
-        return gate_top_k_idx, gate
+        if return_all_scores:
+            return gate_top_k_idx, gate_top_k_val, gate
+        return gate_top_k_idx, gate_top_k_val

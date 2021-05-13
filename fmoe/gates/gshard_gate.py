@@ -15,7 +15,8 @@ class GShardGate(NaiveGate):
         self.capacity = capacity
 
     def forward(self, x):
-        topk_idx, gate_score = super().forward(x)
+        naive_outs = super().forward(x, return_all_scores=True)
+        topk_idx, topk_val, gate_score = naive_outs
 
         S = gate_score.shape[0]
         top_k = topk_idx.shape[0] // gate_score.shape[0]
@@ -31,22 +32,19 @@ class GShardGate(NaiveGate):
         self.set_loss(loss)
 
         cap_rate = self.capacity[0 if self.training else 1]
-        capacity = torch.ones(self.num_expert, dtype=torch.int32)
+        capacity = torch.ones(self.num_expert, dtype=torch.int32,
+                device=x.device)
         capacity *= math.ceil(cap_rate * x.shape[0])
 
-        print(topk_idx)
-        pos, lec, gec = count_by_gate(gate_score, self.num_expert,
+        pos, lec, gec = count_by_gate(topk_idx.reshape(-1), self.num_expert,
                 self.world_size)
-        print(topk_idx)
         new_gec, = fmoe_native.limit_by_capacity(gec, capacity,
                 self.num_expert, self.world_size)
-        print(topk_idx)
         if self.world_size > 1:
             new_lec = fmoe_native.expert_exchange(new_gec, 
                     self.num_expert, self.world_size)
         else:
             new_lec = new_gec
-        print(topk_idx)
 
         fmoe_native.prune_gate_by_capacity(topk_idx,
                 new_lec.to(torch.int32), self.num_expert, self.world_size)
