@@ -7,6 +7,8 @@
 std::vector<torch::Tensor> _limit_by_capacity(
         torch::Tensor expert_count, torch::Tensor capacity,
         long n_expert, long n_worker) {
+    CHECK_INPUT(expert_count);
+    CHECK_INPUT(capacity);
     auto expert_count_ack = torch::empty_like(expert_count);
     auto smgr = getCudaStreamManager(expert_count.device().index());
     fmoe_cuda_limit_by_capacity_impl(

@@ -1,6 +1,7 @@
 r"""
 Balanced gate with GShard's policy (Google, 2020)
 """
+import math
 import torch
 import torch.nn.functional as F
 from .naive_gate import NaiveGate
@@ -14,13 +15,13 @@ class GShardGate(NaiveGate):
         self.capacity = capacity
 
     def forward(self, x):
-        topk_idx, topk_val, gate_score = super().forward(x)
+        topk_idx, gate_score = super().forward(x)
 
         S = gate_score.shape[0]
         top_k = topk_idx.shape[0] // gate_score.shape[0]
         top1_idx = topk_idx.view((-1, top_k))[:, 0]
         c_e = torch.scatter_add(
-                torch.zeros(self.num_expert, device=gate_top_1_idx.device),
+                torch.zeros(self.num_expert, device=top1_idx.device),
                 0,
                 top1_idx,
                 torch.ones_like(top1_idx, dtype=torch.float),
@@ -33,14 +34,19 @@ class GShardGate(NaiveGate):
         capacity = torch.ones(self.num_expert, dtype=torch.int32)
         capacity *= math.ceil(cap_rate * x.shape[0])
 
-        pos, lec, gec = count_by_gate(gate, self.num_expert, self.world_size)
+        print(topk_idx)
+        pos, lec, gec = count_by_gate(gate_score, self.num_expert,
+                self.world_size)
+        print(topk_idx)
         new_gec, = fmoe_native.limit_by_capacity(gec, capacity,
                 self.num_expert, self.world_size)
+        print(topk_idx)
         if self.world_size > 1:
             new_lec = fmoe_native.expert_exchange(new_gec, 
                     self.num_expert, self.world_size)
         else:
             new_lec = new_gec
+        print(topk_idx)
 
         fmoe_native.prune_gate_by_capacity(topk_idx,
                 new_lec.to(torch.int32), self.num_expert, self.world_size)

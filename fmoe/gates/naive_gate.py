@@ -35,9 +35,7 @@ class NaiveGate(BaseGate):
         gate_top_k_val = gate_top_k_val.view(-1, self.top_k)
 
         # (BxL) x 1 x top_k
-        gate_score = F.softmax(gate_top_k_val, dim=-1).unsqueeze(1)
+        gate_score = F.softmax(gate_top_k_val, dim=-1)
         gate_top_k_idx = gate_top_k_idx.view(-1)  # (BxLxtop_k)
 
-        # TODO: capacity
-
-        return gate_top_k_idx, gate_score
+        return gate_top_k_idx, gate

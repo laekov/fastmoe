@@ -10,7 +10,7 @@ import fmoe_cuda
 from .utils import get_torch_default_comm
 
 
-def count_by_gate(gate, num_expert, world_size, comm):
+def count_by_gate(gate, num_expert, world_size):
     # TODO: support -1 in gate, which means ignore this input
     with torch.no_grad():
         _, pos = torch.sort(gate)
