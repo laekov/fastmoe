@@ -1,9 +1,13 @@
 r"""
 Balanced gate with Switch Transformer's policy (Google, 2021)
 """
+import math
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from .naive_gate import NaiveGate
+from .utils import limit_by_capacity
+
 
 class SwitchGate(NaiveGate):
     r"""
@@ -13,7 +17,6 @@ class SwitchGate(NaiveGate):
     def __init__(self, d_model, num_expert, world_size,
             switch_eps=.1, capacity=(1.2, 2.4)):
         super().__init__(d_model, num_expert, world_size, top_k=1)
-        self.gate = nn.Linear(d_model, num_expert * world_size)
         self.switch_eps = switch_eps
         self.capacity = capacity
 
@@ -21,37 +24,35 @@ class SwitchGate(NaiveGate):
         r"""
         The switch firstly conduct softmax and then calculates the top-1
         """
-        gate = super().forward(inp)
+        score = self.gate(inp)
+
         if self.training:
             # random uniform number from [1-eps, 1+eps]
-            noise = torch.rand_like(gate)
+            noise = torch.rand_like(score)
             noise = noise * 2 * self.switch_eps + 1.0 - self.switch_eps
-            gate += noise
+            score += noise
 
         # fp32 softmax for numerical stability
-        gate_score = F.softmax(gate.float(), dim=-1)
+        score = F.softmax(score.float(), dim=-1)
 
-        gate_score_top1, gate_idx_top1 = torch.topk(
-            gate_score_clip, k=1, dim=-1, largest=True
+        top1_score, top1_idx = torch.topk(
+            score, k=1, dim=-1, largest=True
         )  # [.. x top_k]
-        gate_score = gate_score.to(dtype=inp.dtype)
-        gate_score_top1 = gate_score_top1.to(dtype=inp.dtype)
+        top1_score = top1_score.to(dtype=inp.dtype)
+        top1_score = top1_score.to(dtype=inp.dtype)
 
-        gate_score_top1 = gate_score_top1.unsqueeze(1)
-        gate_idx_top1 = gate_idx_top1.view(-1)  # (BxLxtop_k)
+        cap_rate = self.capacity[0 if self.training else 1]
+        capacity = math.ceil(cap_rate * inp.shape[0])
+        limit_by_capacity(top1_idx, self.num_expert, self.world_size, capacity)
 
-        # TODO: capacity limit
-
-        # TODO: not testd, the following code is super dangerous!!!!!!
-        gate_updated = gate_idx_top1
-        gate_updated = gate_updated[gate_updated > -1]
+        valid_idx = top1_idx[top1_idx > -1]
         fraction_expert = torch.scatter_add(
-                torch.zeros(self.tot_expert, device=gate_updated.device),
+                torch.zeros(self.tot_expert, device=valid_idx.device),
                 0,
-                gate_updated,
-                torch.ones_like(gate_updated, dtype=torch.float),
-            ) / gate_updated.view(-1).size(0)
-        prob_expert = gate_score.sum(dim=0) / gate_updated.view(-1).size(0)
-        switch_aux_loss = (fraction_expert * prob_expert).sum() * self.tot_expert
-        self.set_loss(switch_aux_loss)
-        return gate_idx_top1, gate_score_top1
+                valid_idx,
+                torch.ones_like(valid_idx, dtype=torch.float),
+            ) / valid_idx.numel()
+        prob_expert = score.sum(dim=0) / valid_idx.numel()
+        loss = (fraction_expert * prob_expert).sum() * self.tot_expert
+        self.set_loss(loss)
+        return top1_idx, top1_score 
