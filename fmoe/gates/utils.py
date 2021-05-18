@@ -14,7 +14,7 @@ def limit_by_capacity(topk_idx, num_expert, world_size, capacity):
     new_gec, = fmoe_native.limit_by_capacity(gec, capacity,
             num_expert, world_size)
     if world_size > 1:
-        new_lec = fmoe_native.expert_exchange(new_gec, num_expert, world_size)
+        new_lec, = fmoe_native.expert_exchange(new_gec, num_expert, world_size)
     else:
         new_lec = new_gec
 

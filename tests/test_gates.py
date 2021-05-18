@@ -28,7 +28,7 @@ def test_gshard_gate(d_model, batch_size, n_expert, cap):
             capacity=(cap, cap)).cuda()
     x = torch.rand(batch_size, d_model).cuda()
     topk_idx, topk_val = gate(x)
-    counts = [0 for _ in range(n_expert)]
+    counts = [0 for _ in range(n_expert * dist.get_world_size())]
     for v in topk_idx.cpu().view(-1).numpy():
         if v != -1:
             counts[v] += 1
@@ -47,7 +47,7 @@ def test_switch_gate(d_model, batch_size, n_expert, cap):
             capacity=(cap, cap)).cuda()
     x = torch.rand(batch_size, d_model).cuda()
     topk_idx, topk_val = gate(x)
-    counts = [0 for _ in range(n_expert)]
+    counts = [0 for _ in range(n_expert * dist.get_world_size())]
     for v in topk_idx.cpu().view(-1).numpy():
         if v != -1:
             counts[v] += 1

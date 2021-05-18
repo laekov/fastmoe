@@ -10,6 +10,12 @@ import fmoe_cuda
 from .utils import get_torch_default_comm
 
 
+def _ensure_nccl(t, comm=None):
+    if comm is None:
+        comm = get_torch_default_comm()
+    fmoe_cuda.ensure_nccl(comm, t)
+
+
 def count_by_gate(gate, num_expert, world_size):
     # TODO: support -1 in gate, which means ignore this input
     with torch.no_grad():
@@ -21,13 +27,13 @@ def count_by_gate(gate, num_expert, world_size):
         local_expert_count.index_put_((gate_idx.long(),), gate_count)
 
         if world_size > 1:
+            _ensure_nccl(gate)
             (global_expert_count,) = fmoe_cuda.expert_exchange(
                 local_expert_count, num_expert, world_size
             )
         else:
             global_expert_count = local_expert_count
     return pos, local_expert_count, global_expert_count
-
 
 
 def prepare_forward(gate, num_expert, world_size, comm=None):
@@ -42,9 +48,7 @@ def prepare_forward(gate, num_expert, world_size, comm=None):
         comm: the communicator of all workers in the expert-parallel group.
     """
     if world_size > 1:
-        if comm is None:
-            comm = get_torch_default_comm()
-        fmoe_cuda.ensure_nccl(comm, gate)
+        _ensure_nccl(gate, comm=comm)
 
     pos, local_expert_count, global_expert_count = count_by_gate(gate, 
             num_expert, world_size)
