@@ -16,15 +16,17 @@ def _ensure_nccl(t, comm=None):
     fmoe_cuda.ensure_nccl(comm, t)
 
 
-def count_by_gate(gate, num_expert, world_size):
-    # TODO: support -1 in gate, which means ignore this input
+def count_by_gate(gate, num_expert, world_size, require_pos=True):
     with torch.no_grad():
-        _, pos = torch.sort(gate)
-        gate_idx, gate_count = torch.unique(gate, return_counts=True)
+        flatten_gate = gate.view(-1)
+        eff_gate = flatten_gate[flatten_gate != -1]
+
         local_expert_count = torch.zeros(
             num_expert * world_size, device=gate.device, dtype=torch.long
         )
-        local_expert_count.index_put_((gate_idx.long(),), gate_count)
+        ones = torch.ones(eff_gate.numel(),
+                device=gate.device, dtype=torch.long)
+        local_expert_count.index_add_(0, eff_gate, ones)
 
         if world_size > 1:
             _ensure_nccl(gate)
@@ -33,6 +35,13 @@ def count_by_gate(gate, num_expert, world_size):
             )
         else:
             global_expert_count = local_expert_count
+        if not require_pos:
+            pos = None
+        else:
+            lec_cum = torch.cumsum(local_expert_count, dim=0).int()
+            pos_size = lec_cum[-1].item()
+            pos = torch.empty((pos_size,), device=gate.device, dtype=torch.long)
+            fmoe_cuda.assign_pos_(lec_cum, gate, pos)
     return pos, local_expert_count, global_expert_count
 
 

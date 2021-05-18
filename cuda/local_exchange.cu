@@ -2,28 +2,6 @@
 #include "utils/fmoe_utils.h"
 #include <torch/extension.h>
 
-std::vector<torch::Tensor> _expert_count(
-        torch::Tensor gate, 
-        size_t num_expert) {
-    const auto batch_size = gate.size(0);
-
-    auto ec_options = torch::TensorOptions().dtype(torch::kInt32);
-    auto expert_count = torch::empty(num_expert, ec_options);
-
-    auto pos_options = torch::TensorOptions()
-        .device(gate.device())
-        .dtype(torch::kInt32);
-    auto pos = torch::empty(batch_size, pos_options);
-    fmoe_cuda_expert_count_impl(
-            gate.data_ptr<int>(),
-            expert_count.data_ptr<int>(),
-            pos.data_ptr<int>(),
-            num_expert,
-            batch_size);
-
-    return {expert_count, pos};
-}
-
 std::vector<torch::Tensor> _local_scatter(
     torch::Tensor input,
     torch::Tensor pos) {
@@ -72,4 +50,21 @@ std::vector<torch::Tensor> _local_gather(
             smgr);
     }));
     return {output,};
+}
+
+void _assign_pos(
+    torch::Tensor cum_count,
+    torch::Tensor gate,
+    torch::Tensor pos) {
+    auto smgr = getCudaStreamManager(cum_count.device().index());
+    auto gate_shp = gate.sizes();
+    size_t batch_size = gate_shp[0], topk = 1;
+    if (gate_shp.size() == 2) {
+        topk = gate_shp[1];
+    }
+    fmoe_cuda_assign_pos_impl(
+            cum_count.data_ptr<int>(),
+            gate.data_ptr<long>(),
+            pos.data_ptr<long>(),
+            batch_size, topk, smgr);
 }

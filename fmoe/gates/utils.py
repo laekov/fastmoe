@@ -10,7 +10,8 @@ def limit_by_capacity(topk_idx, num_expert, world_size, capacity):
     capacity = torch.ones(num_expert, dtype=torch.int32,
             device=topk_idx.device) * capacity
 
-    pos, lec, gec = count_by_gate(topk_idx.reshape(-1), num_expert, world_size)
+    pos, lec, gec = count_by_gate(topk_idx, num_expert, world_size,
+            require_pos=False)
     new_gec, = fmoe_native.limit_by_capacity(gec, capacity,
             num_expert, world_size)
     if world_size > 1:
