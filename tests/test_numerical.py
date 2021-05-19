@@ -39,9 +39,8 @@ def _perform_forward(
 
     inp_raw.requires_grad = True
     gate_idx, gate_score = moe.gate(inp_raw)
-    inp_repeated = inp_raw.repeat_interleave(repeats=top_k, dim=0)
     moe_out = moe(inp)
-    raw_out = moe_raw(inp_repeated, gate_idx, gate_score)
+    raw_out = moe_raw(inp_raw, gate_idx, gate_score)
 
     raw_out.mean().backward()
     moe_out.mean().backward()

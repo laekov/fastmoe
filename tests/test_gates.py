@@ -58,5 +58,5 @@ def test_switch_gate(d_model, batch_size, n_expert, cap):
 
 if __name__ == '__main__':
     _ensure_initialized()
-    # test_gshard_gate(4096, 1024, 4, .2)
-    test_switch_gate(4096, 1024, 4, .2)
+    test_gshard_gate(4096, 1024, 4, .2)
+    # test_switch_gate(4096, 1024, 4, .2)
