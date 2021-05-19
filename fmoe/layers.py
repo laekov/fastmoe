@@ -113,8 +113,11 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
         fwd_expert_count,
         fwd_batch_size,
     ) = prepare_forward(gate, num_expert, world_size)
+    topk = 1
+    if len(gate.shape) == 2:
+        topk = gate.shape[1]
     x = MOEScatter.apply(
-        inp, pos % inp.shape[0],
+        inp, pos // topk,
         local_expert_count, global_expert_count, fwd_batch_size, world_size
     )
     x = expert_fn(x, fwd_expert_count)

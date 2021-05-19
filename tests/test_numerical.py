@@ -21,11 +21,9 @@ def _perform_forward(
 ):
     moe.zero_grad()
     moe_raw.zero_grad()
-    if not mp_group:
-        inp = torch.rand(batch_size, d_model).cuda()
-    else:
+    inp = torch.rand(batch_size, d_model).cuda()
+    if mp_group is not None:
         group_sender = rank // mp_group.size() * mp_group.size()
-        inp = torch.rand(batch_size, d_model).cuda()
         torch.distributed.broadcast(inp, group_sender, group=mp_group)
         torch.distributed.broadcast(
             moe.gate.gate.weight.data, group_sender, group=mp_group

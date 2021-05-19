@@ -79,10 +79,13 @@ def _local_scatter(inp, pos):
     return inp_buf
 
 
-def _local_gather(inp, pos, out_batch_size):
+def _local_gather(inp, pos, out_batch_size, maybe_overlap=True):
     inp_buf = torch.zeros(out_batch_size, inp.shape[-1],
             dtype=inp.dtype, device=inp.device)
-    inp_buf.index_copy_(0, pos, inp)
+    if maybe_overlap:
+        inp_buf.index_add_(0, pos, inp)
+    else:
+        inp_buf.index_copy_(0, pos, inp)
     return inp_buf
 
 
@@ -187,7 +190,8 @@ class MOEGather(Function):
             )
         else:
             local_output_buf = global_output_buf
-        output = _local_gather(local_output_buf, pos, local_batch_size)
+        output = _local_gather(local_output_buf, pos, local_batch_size,
+                maybe_overlap=False)
 
         ctx.moe_args = (global_output_buf.shape[0], world_size)
         variables = (pos, local_expert_count, global_expert_count)

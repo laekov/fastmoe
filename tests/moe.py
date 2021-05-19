@@ -42,6 +42,7 @@ class BruteForceMoELinear(nn.Module):
             x = x + self.bias_h4toh[i]
             o[idx] = x
         gate_score = gate_score.unsqueeze(1)
+
         x = torch.bmm(gate_score, o.view(-1, self.top_k, self.d_model)).reshape(
             -1, self.d_model
         )
