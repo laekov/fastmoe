@@ -22,12 +22,6 @@ void _ensure_nccl(c10d::ProcessGroupNCCL& p, torch::Tensor t);
 #endif  // FMOE_USE_NCCL
 
 // local_exchange
-std::vector<torch::Tensor> _local_scatter(
-    torch::Tensor input,
-    torch::Tensor pos);
-std::vector<torch::Tensor> _local_gather(
-    torch::Tensor output_buf,
-    torch::Tensor pos);
 void _assign_pos(
     torch::Tensor cum_count,
     torch::Tensor gate,
@@ -60,8 +54,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("ensure_nccl", &_ensure_nccl, "FastMoE ensure torch nccl comm");
 #endif
 
-    m.def("local_scatter", &_local_scatter, "FastMoE local scatter (CUDA)");
-    m.def("local_gather", &_local_gather, "FastMoE local gather (CUDA)");
     m.def("assign_pos_", &_assign_pos, "FastMoE assign pos by gate(CUDA)");
 
     m.def("linear_forward", &_linear_forward, "FastMoE forward (CUDA)");
