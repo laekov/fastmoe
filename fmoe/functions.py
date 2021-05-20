@@ -110,21 +110,25 @@ class MOELinear(Function):
     """
 
     @staticmethod
-    def forward(ctx, global_input_buf, weight, fwd_expert_count):
+    def forward(ctx, global_input_buf, fwd_expert_count, weight, bias=None):
         (global_output_buf,) = fmoe_cuda.forward(
-            global_input_buf, weight, fwd_expert_count
+            global_input_buf, fwd_expert_count, weight, bias
         )
-        variables = (global_input_buf, weight, fwd_expert_count)
+        variables = (global_input_buf, fwd_expert_count, weight, bias)
         ctx.save_for_backward(*variables)
         return global_output_buf
 
     @staticmethod
     def backward(ctx, grad_out):
-        (input_buf, weight, fwd_expert_count) = ctx.saved_tensors
-        grad_inp_buf, grad_weight = fmoe_cuda.backward(
-            grad_out, input_buf, weight, fwd_expert_count
+        (input_buf, fwd_expert_count, weight, bias) = ctx.saved_tensors
+        grad_inp_buf, grad_weight, grad_bias = fmoe_cuda.backward(
+            grad_out, input_buf, fwd_expert_count, weight, bias
         )
-        return grad_inp_buf, grad_weight, None
+
+        if not torch.is_tensor(bias):
+            grad_bias = None
+
+        return grad_inp_buf, None, grad_weight, grad_bias
 
 
 class MOEGather(Function):
