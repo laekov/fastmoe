@@ -1,6 +1,9 @@
+import sys
 import torch
 from fmoe.layers import _fmoe_general_global_forward
 from fmoe import FMoETransformerMLP
+
+from test_ddp import _run_distributed
 
 
 class ConstantGate(torch.nn.Module):
@@ -16,11 +19,33 @@ class ConstantGate(torch.nn.Module):
 
 
 def test_zero_fwd(num_expert=2, batch_size=4, d_hidden=8, world_size=1):
+    _run_distributed('_test_zero_fwd',
+            1,
+            {
+                'num_expert': num_expert,
+                'batch_size': batch_size,
+                'd_hidden': d_hidden
+            },
+            script=__file__
+    )
+
+def _test_zero_fwd(num_expert=2, batch_size=4, d_hidden=8, world_size=1):
     inp = torch.rand(batch_size, d_hidden).cuda()
     gate = torch.zeros(batch_size, dtype=torch.int64).cuda()
     x = _fmoe_general_global_forward(inp, gate, lambda x, y: x, num_expert,
             world_size)
 
+
+def test_zero_transformer(num_expert=2, batch_size=4, d_hidden=8, world_size=1):
+    _run_distributed('_test_zero_transformer',
+            1,
+            {
+                'num_expert': num_expert,
+                'batch_size': batch_size,
+                'd_hidden': d_hidden
+            },
+            script=__file__
+    )
 
 def test_zero_transformer(num_expert=2, batch_size=4, d_hidden=8, world_size=1):
     inp = torch.rand(batch_size, d_hidden).cuda()
@@ -30,9 +55,13 @@ def test_zero_transformer(num_expert=2, batch_size=4, d_hidden=8, world_size=1):
 
 
 if __name__ == '__main__':
-    torch.distributed.init_process_group(backend="nccl")
-    torch.cuda.set_device(torch.distributed.get_rank())
-    # test_zero_fwd(world_size=torch.distributed.get_world_size())
-    test_zero_transformer(num_expert=16, batch_size=4096, d_hidden=1024,
-            world_size=torch.distributed.get_world_size())
-    print('done')
+    if len(sys.argv) >= 3:
+        args = json.loads(sys.argv[2])
+        torch.distributed.init_process_group(backend="nccl")
+        args['world_size'] = torch.distributed.get_world_size()
+        locals()[sys.argv[1]](**args)
+    else:
+        # test_zero_fwd(world_size=torch.distributed.get_world_size())
+        test_zero_transformer(num_expert=16, batch_size=4096, d_hidden=1024,
+                world_size=1)
+        print('done')

@@ -29,7 +29,7 @@ if __name__ == '__main__':
                     'cuda/local_exchange.cu',
                     'cuda/balancing.cu',
                     'cuda/global_exchange.cpp',
-                    'cuda/parallel_linear.cpp',
+                    'cuda/parallel_linear.cu',
                     'cuda/fmoe_cuda.cpp',
                     ],
                 extra_compile_args={

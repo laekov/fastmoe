@@ -10,7 +10,7 @@ import numpy as np
 from copy import deepcopy
 from fmoe.functions import MOEGather, MOEScatter, count_by_gate
 
-from test_numerical import _assert_numercial
+from test_numerical import _assert_numerical
 
 @pytest.mark.parametrize("n_expert", [1, 4, 8])
 @pytest.mark.parametrize("topk", [1, 2])
@@ -30,10 +30,10 @@ def test_scatter(n_expert, topk, batch_size, d_model, world_size):
     inp_raw = inp.data.clone()
     out_raw = torch.empty(pos.shape[0], d_model,
             device=inp.device, dtype=inp.dtype)
-    out_raw.sum().backward()
+    # out_raw.sum().backward()
     for i, f in enumerate(pos.cpu()):
         out_raw[i] = inp[f % batch_size]
-    _assert_numercial(['out'], [out], [out_raw], 0)
+    _assert_numerical(['out'], [out], [out_raw], 0)
     # TODO: check grad
 
 if __name__ == '__main__':

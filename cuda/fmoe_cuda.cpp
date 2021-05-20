@@ -23,20 +23,24 @@ void _ensure_nccl(c10d::ProcessGroupNCCL& p, torch::Tensor t);
 
 // local_exchange
 void _assign_pos(
-    torch::Tensor cum_count,
-    torch::Tensor gate,
-    torch::Tensor pos);
+        torch::Tensor cum_count,
+        torch::Tensor gate,
+        torch::Tensor pos);
 
 // parallel_linear
 std::vector<torch::Tensor> _linear_forward(
         torch::Tensor input_buf,
+        torch::Tensor expert_count,
         torch::Tensor weight,
-        torch::Tensor expert_count);
+        at::optional<torch::Tensor> bias
+        );
 std::vector<torch::Tensor> _linear_backward(
-    torch::Tensor grad_output_buf,
-    torch::Tensor input_buf,
-    torch::Tensor weight, 
-    torch::Tensor expert_count);
+        torch::Tensor grad_output_buf,
+        torch::Tensor input_buf,
+        torch::Tensor expert_count,
+        torch::Tensor weight,
+        at::optional<torch::Tensor> bias
+        );
 
 // balancing
 std::vector<torch::Tensor> _limit_by_capacity(

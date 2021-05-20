@@ -1,9 +1,14 @@
 import pytest
+
 import os
+import sys
+import json
 import math
+
 import torch
 import torch.distributed as dist
 from fmoe.gates import GShardGate, SwitchGate
+from test_ddp import _run_distributed
 
 
 def _ensure_initialized():
@@ -16,14 +21,27 @@ def _ensure_initialized():
         dist.init_process_group(backend="nccl")
 
 
-@pytest.mark.parametrize("d_model", [8, 1024])
-@pytest.mark.parametrize("batch_size", [16, 4096])
-@pytest.mark.parametrize("n_expert", [1, 4, 16])
-@pytest.mark.parametrize("cap", [.1, .5, 1.1])
+@pytest.mark.parametrize("d_model", [1024])
+@pytest.mark.parametrize("batch_size", [16])
+@pytest.mark.parametrize("n_expert", [1, 4])
+@pytest.mark.parametrize("cap", [.1, 1.1])
 def test_gshard_gate(d_model, batch_size, n_expert, cap):
-    _ensure_initialized()
-    if dist.get_world_size() * n_expert < 2:
+    if 1 * n_expert < 2:
         pytest.skip("No enough experts")
+    _run_distributed('_test_gshard_gate',
+            1,
+            {
+                'd_model': d_model,
+                'batch_size': batch_size,
+                'n_expert': n_expert,
+                'cap': cap
+            },
+            script=__file__
+    )
+
+
+def _test_gshard_gate(d_model, batch_size, n_expert, cap):
+    _ensure_initialized()
     gate = GShardGate(d_model, n_expert, dist.get_world_size(),
             capacity=(cap, cap)).cuda()
     x = torch.rand(batch_size, d_model).cuda()
@@ -37,11 +55,24 @@ def test_gshard_gate(d_model, batch_size, n_expert, cap):
         assert(i <= real_cap)
 
 
-@pytest.mark.parametrize("d_model", [8, 1024])
-@pytest.mark.parametrize("batch_size", [16, 4096])
-@pytest.mark.parametrize("n_expert", [1, 4, 16])
-@pytest.mark.parametrize("cap", [.1, .5, 1.1])
+@pytest.mark.parametrize("d_model", [1024])
+@pytest.mark.parametrize("batch_size", [4096])
+@pytest.mark.parametrize("n_expert", [1, 16])
+@pytest.mark.parametrize("cap", [.1, .8])
 def test_switch_gate(d_model, batch_size, n_expert, cap):
+    _run_distributed('_test_switch_gate',
+            1,
+            {
+                'd_model': d_model,
+                'batch_size': batch_size,
+                'n_expert': n_expert,
+                'cap': cap
+            },
+            script=__file__
+    )
+
+
+def _test_switch_gate(d_model, batch_size, n_expert, cap):
     _ensure_initialized()
     gate = SwitchGate(d_model, n_expert, dist.get_world_size(),
             capacity=(cap, cap)).cuda()
@@ -57,6 +88,11 @@ def test_switch_gate(d_model, batch_size, n_expert, cap):
 
 
 if __name__ == '__main__':
-    _ensure_initialized()
-    test_gshard_gate(4096, 1024, 4, .2)
-    # test_switch_gate(4096, 1024, 4, .2)
+    if len(sys.argv) >= 3:
+        args = json.loads(sys.argv[2])
+        locals()[sys.argv[1]](**args)
+    else:
+        _ensure_initialized()
+        # test_gshard_gate(4096, 1024, 4, .2)
+        test_gshard_gate(8, 16, 1, .1)
+        # test_switch_gate(4096, 1024, 4, .2)
