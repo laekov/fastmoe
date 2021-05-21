@@ -12,7 +12,7 @@ class NaiveGate(BaseGate):
     r"""
     A naive gate implementation that defines the standard behavior of the gate
     which determines which experts the tokens are going to.
-    Both the indecies and the score, or confidence, are output to the parent
+    Both the indicies and the score, or confidence, are output to the parent
     module.
     The load-balance strategies are also designed to be implemented within the
     `Gate` module.

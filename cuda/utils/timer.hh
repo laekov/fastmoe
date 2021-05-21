@@ -1,6 +1,8 @@
 #ifndef TIMER_HH
 #define TIMER_HH
 
+/*
+ * This part of code is not used.
 #include <chrono>
 
 inline double getDuration(std::chrono::time_point<std::chrono::system_clock> a,
@@ -9,8 +11,7 @@ inline double getDuration(std::chrono::time_point<std::chrono::system_clock> a,
 }
 
 #define timestamp(__var__) auto __var__ = std::chrono::system_clock::now();
-
-#include <chrono>
+*/
 
 #endif  // TIMER_HH
 
