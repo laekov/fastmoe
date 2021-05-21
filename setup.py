@@ -7,7 +7,7 @@ cxx_flags = []
 ext_libs = []
 
 if os.environ.get('USE_NCCL', '0') == '1':
-    cxx_flags.append('-DMOE_USE_NCCL')
+    cxx_flags.append('-DFMOE_USE_NCCL')
     ext_libs.append('nccl')
 
 
@@ -20,16 +20,17 @@ if __name__ == '__main__':
         author_email='hja20@mails.tsinghua.edu.cn',
         license='Apache-2',
         url='https://github.com/laekov/fastmoe',
-        packages=['fmoe', 'fmoe.megatron'],
+        packages=['fmoe', 'fmoe.megatron', 'fmoe.gates'],
         ext_modules=[
             CUDAExtension(
                 name='fmoe_cuda', 
                 sources=[
-                    'cuda/moe.cpp',
-                    'cuda/cuda_stream_manager.cpp',
-                    'cuda/moe_compute_kernel.cu',
-                    'cuda/moe_comm_kernel.cu',
-                    'cuda/moe_fused_kernel.cu',
+                    'cuda/stream_manager.cpp',
+                    'cuda/local_exchange.cu',
+                    'cuda/balancing.cu',
+                    'cuda/global_exchange.cpp',
+                    'cuda/parallel_linear.cu',
+                    'cuda/fmoe_cuda.cpp',
                     ],
                 extra_compile_args={
                     'cxx': cxx_flags,

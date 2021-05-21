@@ -28,11 +28,12 @@ class BruteForceMoELinear(nn.Module):
         self.top_k = top_k
 
     def forward(self, inp, gate_idx, gate_score):
-        gate_long = gate_idx.long()
+        inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
+        gate_long = gate_idx.long().view(-1)
         batch_size = inp.size(0)
         o = torch.empty(batch_size, self.d_model, dtype=inp.dtype, device=inp.device)
         for i in range(self.weight_htoh4.shape[0]):
-            idx = gate_idx == i
+            idx = gate_long == i
             x = inp[idx]
             x = x @ self.weight_htoh4[i].t()
             x = x + self.bias_htoh4[i]
@@ -40,6 +41,8 @@ class BruteForceMoELinear(nn.Module):
             x = x @ self.weight_h4toh[i].t()
             x = x + self.bias_h4toh[i]
             o[idx] = x
+        gate_score = gate_score.unsqueeze(1)
+
         x = torch.bmm(gate_score, o.view(-1, self.top_k, self.d_model)).reshape(
             -1, self.d_model
         )
@@ -55,11 +58,13 @@ class BruteForceMoE(nn.Module):
         self.experts = [expert(d_model) for _ in range(num_expert * world_size)]
 
     def forward(self, inp, gate_idx, gate_score):
-        gate_long = gate_idx.long()
+        inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
+        gate_long = gate_idx.long().view(-1)
         batch_size = inp.size(0)
         x = inp.new_zeros((batch_size, self.d_model))
         for i in range(batch_size):
             x[i] = self.experts[gate_long[i]](inp[i])
+        gate_score = gate_score.unsqueeze(1)
         x = torch.bmm(gate_score, x.view(-1, self.top_k, self.d_model)).reshape(
             -1, self.d_model
         )

@@ -85,11 +85,11 @@ inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
                                 const c10::Half *beta,
                                 c10::Half *C, int ldc) {
     return cublasHgemm(handle, transa, transb, m, n, k, 
-			(const __half*)alpha, 
-			(const __half*)A, lda, 
-			(const __half*)B, ldb, 
-			(const __half*)beta, 
-			(__half*)C, ldc);
+            (const __half*)alpha, 
+            (const __half*)A, lda, 
+            (const __half*)B, ldb, 
+            (const __half*)beta, 
+            (__half*)C, ldc);
 }
 #endif  // CUBLAS_WRAPPER_H
 

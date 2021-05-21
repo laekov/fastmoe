@@ -24,7 +24,7 @@ def _perform_forward(
 
     inp = torch.rand(batch_size, d_model).type(data_type).cuda()
         
-    if mp_group:
+    if mp_group is not None:
         group_sender = rank // mp_group.size() * mp_group.size()
         torch.distributed.broadcast(inp, group_sender, group=mp_group)
         torch.distributed.broadcast(
@@ -38,10 +38,9 @@ def _perform_forward(
     inp.requires_grad = True
 
     inp_raw.requires_grad = True
-    gate_idx, gate_score, _ = moe.gate(inp_raw)
-    inp_repeated = inp_raw.repeat_interleave(repeats=top_k, dim=0)
+    gate_idx, gate_score = moe.gate(inp_raw)
     moe_out = moe(inp)
-    raw_out = moe_raw(inp_repeated, gate_idx, gate_score)
+    raw_out = moe_raw(inp_raw, gate_idx, gate_score)
 
     raw_out.mean().backward()
     moe_out.mean().backward()
@@ -51,7 +50,7 @@ def _perform_forward(
 
 def _assert_numerical(names, moe_out_list, raw_out_list, rank, precision=1e-3):
     for name, mo, ro in zip(names, moe_out_list, raw_out_list):
-        err = (mo - ro).abs().sum()
+        err = (mo - ro).abs().max()
         print("Rank {} {} abs err {}".format(rank, name, err))
         if err > precision:
             sys.stderr.write(f"=========== {name} moe out ==============\n")

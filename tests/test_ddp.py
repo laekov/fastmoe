@@ -11,7 +11,7 @@ from test_numerical import test_fmoe_linear as _test_fmoe_linear
 from test_numerical import _test_fmoe_local_ddp
 
 
-def _run_distributed(func, world_size, args: Dict):
+def _run_distributed(func, world_size, args: Dict, script=__file__):
     if torch.cuda.device_count() < world_size:
         pytest.skip("No enough GPU")
     import subprocess
@@ -25,7 +25,7 @@ def _run_distributed(func, world_size, args: Dict):
     for i in range(world_size):
         os.environ["OMPI_COMM_WORLD_RANK"] = str(i)
         p = subprocess.Popen(
-            [sys.executable, __file__, func, json.dumps(args)], stdout=subprocess.PIPE
+            [sys.executable, script, func, json.dumps(args)], stdout=subprocess.PIPE
         )
         ps.append(p)
 
