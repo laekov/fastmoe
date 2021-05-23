@@ -11,3 +11,5 @@ build
 *swp
 logs
 dist
+**/.DS_Store
+.idea

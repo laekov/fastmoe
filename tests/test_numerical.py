@@ -384,6 +384,107 @@ def _test_fmoe_local_ddp(rank, world_size, mp_group, dp_group, world_group):
     _assert_numerical(names, ddp_out_list, raw_out_list, rank)
 
 
+@pytest.mark.parametrize("batch_size", [4])
+@pytest.mark.parametrize("num_expert", [None])
+@pytest.mark.parametrize("d_model", [16])
+@pytest.mark.parametrize("top_k", [2, 3])
+@pytest.mark.parametrize("expert", [ [NaiveExpert for _ in range(4)], [LinearExpert, NaiveExpert, LinearExpert, NaiveExpert, LinearExpert, NaiveExpert, LinearExpert, NaiveExpert] ])
+@pytest.mark.parametrize("rank", [0])
+@pytest.mark.parametrize("world_size", [1])
+@pytest.mark.parametrize("mp_group", [None])
+@pytest.mark.parametrize("dp_group", [None])
+@pytest.mark.parametrize("world_group", [None])
+def test_fmoe_experts(
+    batch_size,
+    num_expert,
+    d_model,
+    top_k,
+    expert: Union[Type[nn.Module], str],
+    rank,
+    world_size,
+    mp_group,
+    dp_group,
+    world_group,
+):
+    torch.manual_seed(42 + rank)
+    torch.cuda.manual_seed(42 + rank)
+
+    if isinstance(expert, str):
+        expert = globals()[expert]
+
+    moe = FMoE(
+        num_expert=num_expert,
+        d_model=d_model,
+        gate=NaiveGate,
+        world_size=world_size,
+        mp_group=mp_group,
+        expert=expert,
+        top_k=top_k,
+    ).cuda()
+
+    moe_raw = BruteForceMoE(
+        expert=expert,
+        num_expert=num_expert,
+        d_model=d_model,
+        world_size=world_size,
+        top_k=top_k,
+    ).cuda()
+
+    if world_size == 1:
+        for expert_moe, expert_raw in zip(moe.experts, moe_raw.experts):
+            for para_moe, para_raw in zip(
+                expert_moe.parameters(), expert_raw.parameters()
+            ):
+                para_raw.data = para_moe.data.clone()
+    else:
+        assert len(moe.experts) >= 1
+        for idx, para in enumerate(moe.experts[0].parameters()):
+            para_tensor = torch.cat(
+                [list(expert.parameters())[idx].unsqueeze(0) for expert in moe.experts]
+            )
+            para_array = [torch.empty_like(para_tensor) for _ in range(world_size)]
+            torch.distributed.all_gather(para_array, para_tensor)
+            para_tensor_gathered = torch.cat(para_array, dim=0)
+            assert para_tensor_gathered.shape[0] == len(moe_raw.experts)
+            for expertID in range(para_tensor_gathered.shape[0]):
+                list(moe_raw.experts[expertID].parameters())[
+                    idx
+                ].data = para_tensor_gathered[expertID]
+
+    moe_out, raw_out, moe_grad_in, raw_grad_in = _perform_forward(
+        moe, moe_raw, batch_size, d_model, top_k, rank, mp_group
+    )
+
+    def get_experts_grad(experts: List[nn.Module]):
+        return torch.stack(
+            [
+                torch.stack(
+                    [
+                        p.grad.sum() if p.grad is not None else torch.zeros(1).cuda()
+                        for p in item.parameters()
+                    ]
+                ).sum()
+                for item in experts
+            ]
+        )
+
+    moe_grad, raw_grad = (
+        get_experts_grad(moe.experts),
+        get_experts_grad(moe_raw.experts),
+    )
+
+    if world_size > 1:
+        torch.distributed.all_reduce(raw_grad)
+        mp_size = mp_group.size() if mp_group else 1
+        raw_grad = raw_grad[rank * num_expert : (rank + 1) * num_expert] / mp_size
+
+    moe_out_list = [moe_out, moe_grad, moe_grad_in]
+    raw_out_list = [raw_out, raw_grad, raw_grad_in]
+    names = ["forward", "backward", "grad_in"]
+
+    _assert_numerical(names, moe_out_list, raw_out_list, rank)
+
+
 if __name__ == "__main__":
     test_fmoe_linear(
         batch_size=2,
@@ -396,4 +497,5 @@ if __name__ == "__main__":
         mp_group=None,
         dp_group=None,
         world_group=None,
+        data_type=torch.float32,
     )
