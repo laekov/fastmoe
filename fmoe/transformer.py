@@ -49,6 +49,8 @@ class FMoETransformerMLP(FMoE):
         top_k=2,
         expert_dp_comm="none",
         gate_hook=None,
+        mask=None,
+        mask_dict=None,
     ):
         super().__init__(
             num_expert=num_expert,
@@ -58,6 +60,8 @@ class FMoETransformerMLP(FMoE):
             world_size=world_size,
             mp_group=mp_group,
             gate_hook=gate_hook,
+            mask=mask,
+            mask_dict=mask_dict
         )
         self.experts = _Expert(
             num_expert, d_model, d_hidden, activation, rank=self.mp_rank

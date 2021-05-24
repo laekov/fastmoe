@@ -55,7 +55,11 @@ class BruteForceMoE(nn.Module):
         self.num_expert = num_expert
         self.d_model = d_model
         self.top_k = top_k
-        self.experts = [expert(d_model) for _ in range(num_expert * world_size)]
+        if type(expert) is list:
+            self.experts = [e(d_model) for e in expert]
+            self.num_expert = num_expert = len(expert)
+        else:
+            self.experts = [expert(d_model) for _ in range(num_expert * world_size)]
 
     def forward(self, inp, gate_idx, gate_score):
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)

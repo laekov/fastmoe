@@ -132,6 +132,8 @@ class FMoE(nn.Module):
         gate=NaiveGate,
         expert=None,
         gate_hook=None,
+        mask=None,
+        mask_dict=None,
     ):
         super().__init__()
         self.num_expert = num_expert
@@ -145,14 +147,20 @@ class FMoE(nn.Module):
             self.mp_size = mp_group.size()
             self.mp_rank = mp_group.rank()
         self.top_k = top_k
-        self.gate = gate(d_model, num_expert, world_size, top_k)
-        if expert is not None:
+        if type(expert) is list:
+            self.experts = nn.ModuleList([e(d_model) for e in expert])
+            self.experts_fused = False
+            self.num_expert = num_expert = len(expert)
+        elif expert is not None:
             self.experts = nn.ModuleList([expert(d_model)
                 for _ in range(num_expert)])
             self.experts_fused = False
         else:
             self.experts_fused = True
+        self.gate = gate(d_model, num_expert, world_size, top_k)
         self.gate_hook = gate_hook
+        self.mask = mask
+        self.mask_dict = mask_dict
 
     def expert_fn(self, inp, fwd_expert_count):
         r"""
@@ -196,14 +204,33 @@ class FMoE(nn.Module):
 
         gate_top_k_idx, gate_score = self.gate(inp)
 
-        x = _fmoe_general_global_forward(
-            inp, 
+        # delete masked tensors
+        if self.mask is not None and self.mask_dict is not None:
+            mask = self.mask.view(-1)
+            # to: (BxL') x d_model
+            inp = inp[mask == 0, :]
+            gate_top_k_idx = gate_top_k_idx[mask == 0, :]
+
+        fwd = _fmoe_general_global_forward(
+            inp,
             gate_top_k_idx,
             self.expert_fn, self.num_expert, self.world_size
         )
 
-        x = x.view(inp.shape[0], self.top_k, self.d_model)
-        gate_score = gate_score.view(inp.shape[0], 1, self.top_k)
+        # recover deleted tensors
+        if self.mask is not None and self.mask_dict is not None:
+            # to: (BxL') x top_k x d_model
+            fwd = fwd.view(-1, self.top_k, self.d_model)
+            # to: (BxL) x top_k x d_model
+            x = torch.zeros(mask.shape[0], self.top_k, self.d_model, device=fwd.device, dtype=fwd.dtype)
+            # recover
+            x[mask == 0] = fwd
+            for k, v in self.mask_dict.items():
+                x[mask == k] = v
+        else:
+            x = fwd.view(-1, self.top_k, self.d_model)
+
+        gate_score = gate_score.view(x.shape[0], 1, self.top_k)
         x = torch.bmm(gate_score, x).reshape(-1, self.d_model)
 
         if self.mp_size > 1:
