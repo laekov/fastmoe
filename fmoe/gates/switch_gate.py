@@ -39,7 +39,6 @@ class SwitchGate(NaiveGate):
             score, k=1, dim=-1, largest=True
         )  # [.. x top_k]
         top1_score = top1_score.to(dtype=inp.dtype)
-        top1_score = top1_score.to(dtype=inp.dtype)
 
         cap_rate = self.capacity[0 if self.training else 1]
         capacity = math.ceil(cap_rate * inp.shape[0])

@@ -9,9 +9,11 @@ from .utils import limit_by_capacity
 
 
 class GShardGate(NaiveGate):
-    def __init__(self, d_model, num_expert, world_size, capacity=(1.2, 2.4)):
+    def __init__(self, d_model, num_expert, world_size,
+            capacity=(1.2, 2.4), random_routing=True):
         super().__init__(d_model, num_expert, world_size, top_k=2)
         self.capacity = capacity
+        self.random_routing = True
 
     def forward(self, x):
         naive_outs = super().forward(x, return_all_scores=True)
@@ -33,5 +35,10 @@ class GShardGate(NaiveGate):
         cap_rate = self.capacity[0 if self.training else 1]
         capacity = math.ceil(cap_rate * x.shape[0])
         limit_by_capacity(topk_idx, self.num_expert, self.world_size, capacity)
+
+        if self.random_routing:
+            rand_routing_prob = torch.rand(gate_score.size(0), device=x.device)
+            mask = (2 * topk_val[:, 1] < rand_routing_prob)
+            topk_idx[:, 1].masked_fill_(mask, -1)
 
         return topk_idx, topk_val
