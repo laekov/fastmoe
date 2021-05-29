@@ -14,8 +14,9 @@ class SwitchGate(NaiveGate):
     A switch gate implementation
     """
 
-    def __init__(self, d_model, num_expert, world_size,
+    def __init__(self, d_model, num_expert, world_size, topk=1,
             switch_eps=.1, capacity=(1.2, 2.4)):
+        assert topk == 1, 'topk should be 1 in switch'
         super().__init__(d_model, num_expert, world_size, top_k=1)
         self.switch_eps = switch_eps
         self.capacity = capacity
@@ -42,7 +43,8 @@ class SwitchGate(NaiveGate):
 
         cap_rate = self.capacity[0 if self.training else 1]
         capacity = math.ceil(cap_rate * inp.shape[0])
-        limit_by_capacity(top1_idx, self.num_expert, self.world_size, capacity)
+        _new_lec, _new_gec, top1_idx = limit_by_capacity(
+                top1_idx, self.num_expert, self.world_size, capacity)
 
         valid_idx = top1_idx[top1_idx > -1]
         fraction_expert = torch.scatter_add(

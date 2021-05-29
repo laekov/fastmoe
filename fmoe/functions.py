@@ -189,7 +189,7 @@ class MOEGather(Function):
                 global_output_buf,
                 local_expert_count,
                 global_expert_count,
-                local_batch_size,
+                pos.shape[0],
                 world_size,
             )
         else:
