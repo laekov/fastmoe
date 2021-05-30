@@ -31,24 +31,28 @@ void fmoe_cuda_limit_by_capacity_impl(const long* ec, int* cap,
 }
 
 __global__
-void prune_gate_by_capacity_kernel(long* gate_idx, int* ec,
+void prune_gate_by_capacity_kernel(const long* gate_idx, long* new_gate_idx,
+        int* ec,
         const long batch_size, const long n_expert, const long n_worker) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < batch_size) {
         int orig_cap = atomicSub(ec + gate_idx[i], 1);
         if (orig_cap <= 0) {
-            gate_idx[i] = -1;
+            new_gate_idx[i] = -1;
+        } else {
+            new_gate_idx[i] = gate_idx[i];
         }
     }
 }
 
-void fmoe_cuda_prune_gate_by_capacity_impl(long* gate_idx, int* ec,
+void fmoe_cuda_prune_gate_by_capacity_impl(long* gate_idx, long* new_gate_idx,
+        int* ec,
         const long batch_size, const long n_expert, const long n_worker,
         CudaStreamManager* smgr) {
     dim3 grid_dim(CEIL(batch_size, 1024));
     dim3 block_dim(1024);
     prune_gate_by_capacity_kernel<<<grid_dim, block_dim, 0, smgr->stream(0)>>>(
-            gate_idx, ec, batch_size, n_expert, n_worker
+            gate_idx, new_gate_idx, ec, batch_size, n_expert, n_worker
             );
     smgr->sync(1);
 }

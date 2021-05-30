@@ -43,10 +43,10 @@ std::vector<torch::Tensor> _linear_backward(
         );
 
 // balancing
-std::vector<torch::Tensor> _limit_by_capacity(
+torch::Tensor _limit_by_capacity(
         torch::Tensor expert_count, torch::Tensor capacity,
         long n_expert, long n_experts);
-void _prune_gate_by_capacity(
+torch::Tensor _prune_gate_by_capacity(
         torch::Tensor gate_idx, torch::Tensor expert_count,
         long n_expert, long n_worker);
 
