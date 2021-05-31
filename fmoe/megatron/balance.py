@@ -45,11 +45,14 @@ def generate_megatron_gate_hook(layer_idx, num_expert_global):
     return megatron_gate_hook
 
 
-def add_balance_log(writer, iteration):
+def add_balance_log(model, writer, iteration):
     from megatron import is_last_rank
 
+    if hasattr(model, 'module'):
+        model = model.module
+
     balance_dict_tensor = torch.vstack(
-        [torch.tensor(item, device=item[0].device) for item in balance_dict.values()]
+        [l.mlp.gate.get_loss(clear=True) for l in model.language_model.transformer.layers]
     ).detach()
     world_group = get_torch_default_comm()
     world_size = torch.distributed.get_world_size(group=world_group)
@@ -68,8 +71,6 @@ def add_balance_log(writer, iteration):
                 iteration,
             )
 
-    reset_gate_hook()
-
 
 def patch_forward_step(forward_step_func):
     r"""
@@ -86,16 +87,19 @@ def patch_forward_step(forward_step_func):
         args = get_args()
         output = forward_step_func(data_iterator, model, input_tensor)
 
-        if not is_pipeline_last_stage():
+        if not is_pipeline_last_stage() or not args.balance_strategy or args.balance_strategy == 'naive':
             return output
         loss_name = args.balance_strategy + "_loss"
 
+        if hasattr(model, 'module'):
+            model = model.module
+
+        loss_list = [l.mlp.gate.get_loss(clear=False) for l in model.language_model.transformer.layers]
         (loss, state_dict), bal_loss = (
             output,
             (
                 torch.tensor(
-                    balance_dict[loss_name],
-                    device=balance_dict[loss_name][0].device,
+                    loss_list, device=loss_list[0].device
                 ).mean()
                 * args.balance_loss_weight
             ).float(),

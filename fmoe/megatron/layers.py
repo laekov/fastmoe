@@ -84,7 +84,7 @@ class MegatronMLP(FMoETransformerMLP):
         else:
             world_size = args.world_size
         gate = None
-        if not args.balance_strategy or args.balance_strategy == "gshard":
+        if not args.balance_strategy or args.balance_strategy == "naive":
             from fmoe.gates import NaiveGate
 
             gate = NaiveGate
@@ -92,6 +92,14 @@ class MegatronMLP(FMoETransformerMLP):
             from fmoe.gates import NoisyGate
 
             gate = NoisyGate
+        elif args.balance_strategy == "gshard":
+            from fmoe.gates import GShardGate
+
+            gate = GShardGate
+        elif args.balance_strategy == "switch":
+            from fmoe.gates import SwitchGate
+
+            gate = SwitchGate
         else:
             assert False, "Undefined balance strategy {}" % (args.balance_strategy)
         super().__init__(
