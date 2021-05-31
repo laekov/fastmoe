@@ -1,15 +1,25 @@
-FastMoE currently works with both `v2.0` and `v2.1` release of
+FastMoE works with different versions of
 [Megatron-LM](https://github.com/nvidia/megatron-lm).
+See `fmoe/megatron/utils.py` for arguments of FastMoE.
 
-Patches which you can find in this directory are used to easily enable MoE in
-different versions of Megatron-LM for training Bert. The usage is the same in
-other training scripts.
+An example patch is provided for `v2.2` release.
+The patch can be directly applied to add FastMoE support if you are using
+Megatron-LM v2.2.
+Otherwise, you may need to manually enable FastMoE in your codebase.
+The patch includes the following modifications.
 
-The patch works in the following way.
+### Add arguments to Megatron's argparser
+
+In `megatron/arguments.py`, add `_add_fmoe_args` to the parser.
+
+### Patch checkpoint
+
+In `megatron/training.py`, replace `load_checkpoint` and `save_checkpoint` by
+functions with the same name in `fmoe.megatron.checkpointing`.
 
 ### Building the model in FastMoE style
 
-In `pretrain_bert.py`, the `fmoe.megatron.fmoefy` function is used as an
+In `megatron/training.py`, the `fmoe.megatron.fmoefy` function is used as an
 entrance to one-key introduce FastMoE layer to replace the MLP layers in the
 transformer language models.
 
