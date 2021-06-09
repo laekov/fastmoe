@@ -146,7 +146,7 @@ void fmoe_cuda_linear_backward_impl(
         
         if (has_bias) {
             column_reduce
-            <<<grid_threads, block_threads, sizeof(scalar_t)*1024, smgr->stream(0)>>>
+            <<<grid_threads, block_threads, sizeof(scalar_t)*1024, smgr->stream(i)>>>
             (
                 grad_output_buf + ptr * out_feat,
                 grad_bias + i * out_feat,
