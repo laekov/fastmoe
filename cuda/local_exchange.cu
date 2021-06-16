@@ -18,3 +18,15 @@ void _assign_pos(
             pos.data_ptr<long>(),
             batch_size, topk, smgr);
 }
+
+void _expert_count(
+        torch::Tensor gate_idx,
+        torch::Tensor expert_count) {
+    auto smgr = getCudaStreamManager(gate_idx.device().index());
+    auto batch_size = gate_idx.numel();
+    auto n_expert = expert_count.numel();
+    fmoe_cuda_expert_count_impl(
+            gate_idx.data_ptr<long>(),
+            expert_count.data_ptr<int>(),
+            batch_size, n_expert, smgr);
+}

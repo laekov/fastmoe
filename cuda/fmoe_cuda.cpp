@@ -26,6 +26,9 @@ void _assign_pos(
         torch::Tensor cum_count,
         torch::Tensor gate,
         torch::Tensor pos);
+void _expert_count(
+        torch::Tensor gate_idx,
+        torch::Tensor expert_count);
 
 // parallel_linear
 std::vector<torch::Tensor> _linear_forward(
@@ -58,7 +61,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("ensure_nccl", &_ensure_nccl, "FastMoE ensure torch nccl comm");
 #endif
 
-    m.def("assign_pos_", &_assign_pos, "FastMoE assign pos by gate(CUDA)");
+    m.def("expert_count", &_expert_count, "FastMoE count gate indices (CUDA)");
+    m.def("assign_pos", &_assign_pos, "FastMoE assign pos by gate (CUDA)");
 
     m.def("linear_forward", &_linear_forward, "FastMoE forward (CUDA)");
     m.def("linear_backward", &_linear_backward, "FastMoE backward (CUDA)");
