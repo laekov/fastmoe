@@ -19,7 +19,7 @@ torch::Tensor _expert_exchange(
     return global_expert_count;
 }
 
-std::vector<torch::Tensor> _global_scatter(
+torch::Tensor _global_scatter(
         torch::Tensor input_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
@@ -42,10 +42,10 @@ std::vector<torch::Tensor> _global_scatter(
             smgr
         );
     }));
-    return {global_input_buf,};
+    return global_input_buf;
 }
 
-std::vector<torch::Tensor> _global_gather(
+torch::Tensor _global_gather(
         torch::Tensor output_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
@@ -68,7 +68,7 @@ std::vector<torch::Tensor> _global_gather(
             smgr
         );
     }));
-    return {local_output_buf,};
+    return local_output_buf;
 }
 
 #include <c10d/ProcessGroupNCCL.hpp>

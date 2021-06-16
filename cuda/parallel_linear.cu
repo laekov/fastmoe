@@ -2,7 +2,7 @@
 #include "utils/fmoe_utils.h"
 #include <torch/extension.h>
 
-std::vector<torch::Tensor> _linear_forward(
+torch::Tensor _linear_forward(
         torch::Tensor input_buf,
         torch::Tensor expert_count,
         torch::Tensor weight,
@@ -45,7 +45,7 @@ std::vector<torch::Tensor> _linear_forward(
         );
     }));
 
-    return {output, };
+    return output;
 }
 
 

@@ -8,12 +8,12 @@
 torch::Tensor _expert_exchange(
         torch::Tensor local_expert_count,
         long n_expert, long n_workers);
-std::vector<torch::Tensor> _global_scatter(
+torch::Tensor _global_scatter(
         torch::Tensor input_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
         long batch_size, long n_workers);
-std::vector<torch::Tensor> _global_gather(
+torch::Tensor _global_gather(
         torch::Tensor output_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
@@ -31,7 +31,7 @@ void _expert_count(
         torch::Tensor expert_count);
 
 // parallel_linear
-std::vector<torch::Tensor> _linear_forward(
+torch::Tensor _linear_forward(
         torch::Tensor input_buf,
         torch::Tensor expert_count,
         torch::Tensor weight,

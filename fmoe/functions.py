@@ -104,7 +104,7 @@ class MOEScatter(Function):
     ):
         local_input_buf = _local_scatter(inp, pos)
         if world_size > 1:
-            (global_input_buf,) = fmoe_cuda.global_scatter(
+            global_input_buf = fmoe_cuda.global_scatter(
                 local_input_buf,
                 local_expert_count,
                 global_expert_count,
@@ -124,7 +124,7 @@ class MOEScatter(Function):
         (inp_batch_size, buf_batch_size, world_size) = ctx.moe_args
 
         if world_size > 1:
-            (local_grad_in,) = fmoe_cuda.global_gather(
+            local_grad_in = fmoe_cuda.global_gather(
                 global_grad_in,
                 local_expert_count,
                 global_expert_count,
@@ -144,7 +144,7 @@ class MOELinear(Function):
 
     @staticmethod
     def forward(ctx, global_input_buf, fwd_expert_count, weight, bias=None):
-        (global_output_buf,) = fmoe_cuda.linear_forward(
+        global_output_buf = fmoe_cuda.linear_forward(
             global_input_buf, fwd_expert_count, weight, bias
         )
         variables = (global_input_buf, fwd_expert_count, weight, bias)
@@ -181,7 +181,7 @@ class MOEGather(Function):
         world_size,
     ):
         if world_size > 1:
-            (local_output_buf,) = fmoe_cuda.global_gather(
+            local_output_buf = fmoe_cuda.global_gather(
                 global_output_buf,
                 local_expert_count,
                 global_expert_count,
@@ -204,7 +204,7 @@ class MOEGather(Function):
         fwd_batch_size, world_size = ctx.moe_args
         grad_out_buf = _local_scatter(grad_out.contiguous(), pos)
         if world_size > 1:
-            (global_grad_out_buf,) = fmoe_cuda.global_scatter(
+            global_grad_out_buf = fmoe_cuda.global_scatter(
                 grad_out_buf,
                 local_expert_count,
                 global_expert_count,
