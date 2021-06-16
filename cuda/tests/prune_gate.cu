@@ -14,8 +14,9 @@ int main(int argc, char* args[]) {
     long* gate_idx = new long[batch_size];
     long* n_gate_idx = new long[batch_size];
 
-    int* lec = new int[tot_expert];
-    memset(lec, 0, sizeof(int) * tot_expert);
+    long* lec = new long[tot_expert];
+    memset(lec, 0, sizeof(long) * tot_expert);
+
     for (int i = 0; i < batch_size; ++i) {
         gate_idx[i] = rand() % tot_expert;
         ++lec[gate_idx[i]];
@@ -23,15 +24,19 @@ int main(int argc, char* args[]) {
     for (int i = 0; i < tot_expert; ++i) {
         lec[i] >>= 1;
     }
-    int* g_lec;
-    cudaMalloc(&g_lec, sizeof(int) * tot_expert);
-    cudaMemcpy(g_lec, lec, sizeof(int) * tot_expert, cudaMemcpyHostToDevice);
+    long* g_lec;
+    cudaMalloc(&g_lec, sizeof(long) * tot_expert);
+    cudaMemcpy(g_lec, lec, sizeof(long) * tot_expert, cudaMemcpyHostToDevice);
+
+    int* g_new_lec;
+    cudaMalloc(&g_new_lec, sizeof(int) * tot_expert);
+
     long* g_gate_idx;
     cudaMalloc(&g_gate_idx, sizeof(long) * batch_size);
     cudaMemcpy(g_gate_idx, gate_idx, sizeof(long) * batch_size, cudaMemcpyHostToDevice);
 
     auto smgr = getCudaStreamManager(0);
-    fmoe_cuda_prune_gate_by_capacity_impl(g_gate_idx, g_lec,
+    fmoe_cuda_prune_gate_by_capacity_impl(g_gate_idx, g_lec, g_new_lec,
             batch_size, n_expert, n_worker, smgr);
     cudaMemcpy(n_gate_idx, g_gate_idx, sizeof(long) * batch_size, cudaMemcpyDeviceToHost);
 

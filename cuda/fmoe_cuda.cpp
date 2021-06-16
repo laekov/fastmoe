@@ -5,15 +5,15 @@
 // global_exchange
 #ifdef FMOE_USE_NCCL
 #include <c10d/ProcessGroupNCCL.hpp>
-std::vector<torch::Tensor> _expert_exchange(
+torch::Tensor _expert_exchange(
         torch::Tensor local_expert_count,
         long n_expert, long n_workers);
-std::vector<torch::Tensor> _global_scatter(
+torch::Tensor _global_scatter(
         torch::Tensor input_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
         long batch_size, long n_workers);
-std::vector<torch::Tensor> _global_gather(
+torch::Tensor _global_gather(
         torch::Tensor output_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
@@ -26,9 +26,12 @@ void _assign_pos(
         torch::Tensor cum_count,
         torch::Tensor gate,
         torch::Tensor pos);
+void _expert_count(
+        torch::Tensor gate_idx,
+        torch::Tensor expert_count);
 
 // parallel_linear
-std::vector<torch::Tensor> _linear_forward(
+torch::Tensor _linear_forward(
         torch::Tensor input_buf,
         torch::Tensor expert_count,
         torch::Tensor weight,
@@ -58,7 +61,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("ensure_nccl", &_ensure_nccl, "FastMoE ensure torch nccl comm");
 #endif
 
-    m.def("assign_pos_", &_assign_pos, "FastMoE assign pos by gate(CUDA)");
+    m.def("expert_count", &_expert_count, "FastMoE count gate indices (CUDA)");
+    m.def("assign_pos", &_assign_pos, "FastMoE assign pos by gate (CUDA)");
 
     m.def("linear_forward", &_linear_forward, "FastMoE forward (CUDA)");
     m.def("linear_backward", &_linear_backward, "FastMoE backward (CUDA)");

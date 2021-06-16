@@ -25,3 +25,47 @@ void fmoe_cuda_assign_pos_impl(
         (cum_count, gate, pos, numel, topk);
     smgr->sync(1);
 }
+
+#define PERTHREAD_EXPERTS 256
+#define WARP_SIZE 32
+
+__global__
+void expert_count_kernel(const long* gate_idx, int* expert_count,
+        const size_t batch_size, const size_t n_expert) {
+    int res_tmp[PERTHREAD_EXPERTS] = {0};
+    long expert_min = blockIdx.x * PERTHREAD_EXPERTS;
+    long expert_max = expert_min + PERTHREAD_EXPERTS;
+    if (expert_max > n_expert) {
+        expert_max = n_expert;
+    }
+    for (int i = threadIdx.x; i < batch_size; i += blockDim.x) {
+        long idx = gate_idx[i];
+        if (idx == -1) {
+            continue;
+        }
+        if (idx < expert_min || idx >= expert_max) {
+            continue;
+        }
+        res_tmp[idx - expert_min] += 1;
+    }
+    for (int i = expert_min; i < expert_max; ++i) {
+        int x = res_tmp[i - expert_min];
+#pragma unroll
+        for (int j = 1; j < WARP_SIZE; j <<= 1) {
+            x = x + __shfl_down_sync(-1u, x, j);
+        }
+        if (threadIdx.x % WARP_SIZE == 0) {
+            atomicAdd(expert_count + i, x);
+        }
+    }
+}
+
+void fmoe_cuda_expert_count_impl(
+        const long* gate_idx, int* expert_count,
+        const size_t batch_size, const size_t n_expert,
+        CudaStreamManager* smgr) {
+    expert_count_kernel
+        <<<CEIL(n_expert, PERTHREAD_EXPERTS), 256, 0, smgr->stream(0)>>>
+        (gate_idx, expert_count, batch_size, n_expert);
+    smgr->sync(1);
+}

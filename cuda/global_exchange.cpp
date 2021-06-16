@@ -5,7 +5,7 @@
 #ifdef FMOE_USE_NCCL
 #include <nccl.h>
 
-std::vector<torch::Tensor> _expert_exchange(
+torch::Tensor _expert_exchange(
         torch::Tensor local_expert_count,
         long n_expert, long n_workers) {
     auto global_expert_count = torch::empty_like(local_expert_count);
@@ -16,10 +16,10 @@ std::vector<torch::Tensor> _expert_exchange(
             global_expert_count.data_ptr<long>(),
             n_expert, n_workers,
             smgr);
-    return {global_expert_count};
+    return global_expert_count;
 }
 
-std::vector<torch::Tensor> _global_scatter(
+torch::Tensor _global_scatter(
         torch::Tensor input_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
@@ -42,10 +42,10 @@ std::vector<torch::Tensor> _global_scatter(
             smgr
         );
     }));
-    return {global_input_buf,};
+    return global_input_buf;
 }
 
-std::vector<torch::Tensor> _global_gather(
+torch::Tensor _global_gather(
         torch::Tensor output_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
@@ -68,7 +68,7 @@ std::vector<torch::Tensor> _global_gather(
             smgr
         );
     }));
-    return {local_output_buf,};
+    return local_output_buf;
 }
 
 #include <c10d/ProcessGroupNCCL.hpp>
@@ -86,7 +86,7 @@ public:
                 "fastmoe_nccl_comm",
                 rank);
         ncclComm_t comm;
-        ncclCommInitRank(&comm, getSize(), ncclID, rank);
+        NCCL_SAFE_CALL(ncclCommInitRank(&comm, getSize(), ncclID, rank));
         return comm;
     }
 };
