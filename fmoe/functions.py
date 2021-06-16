@@ -30,7 +30,7 @@ def count_by_gate(gate, num_expert, world_size, require_pos=True):
 
         if world_size > 1:
             _ensure_nccl(gate)
-            (global_expert_count,) = fmoe_cuda.expert_exchange(
+            global_expert_count = fmoe_cuda.expert_exchange(
                 local_expert_count, num_expert, world_size
             )
         else:

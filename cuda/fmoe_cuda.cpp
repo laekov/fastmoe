@@ -5,7 +5,7 @@
 // global_exchange
 #ifdef FMOE_USE_NCCL
 #include <c10d/ProcessGroupNCCL.hpp>
-std::vector<torch::Tensor> _expert_exchange(
+torch::Tensor _expert_exchange(
         torch::Tensor local_expert_count,
         long n_expert, long n_workers);
 std::vector<torch::Tensor> _global_scatter(
