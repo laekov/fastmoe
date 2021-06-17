@@ -94,15 +94,11 @@ def patch_forward_step(forward_step_func):
         if hasattr(model, 'module'):
             model = model.module
 
-        loss_list = [l.mlp.gate.get_loss(clear=False) for l in model.language_model.transformer.layers]
+        loss_list = [l.mlp.gate.get_loss(clear=False).view(1)
+                for l in model.language_model.transformer.layers]
         (loss, state_dict), bal_loss = (
             output,
-            (
-                torch.tensor(
-                    loss_list, device=loss_list[0].device
-                ).mean()
-                * args.balance_loss_weight
-            ).float(),
+            torch.cat(loss_list).mean() * args.balance_loss_weight
         )
 
         # avarage across world group
