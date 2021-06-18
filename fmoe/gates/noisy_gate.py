@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
+import math
 
 
 class NoisyGate(BaseGate):
@@ -23,6 +24,16 @@ class NoisyGate(BaseGate):
         self.softmax = nn.Softmax(1)
 
         self.noise_epsilon = 1e-2
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        # Approach is the same as in torch.nn.Linear
+        # https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/linear.py#L88
+
+        torch.nn.init.kaiming_uniform_(self.w_gate, a=math.sqrt(5))
+        torch.nn.init.kaiming_uniform_(self.w_noise, a=math.sqrt(5))
+
 
     def _gates_to_load(self, gates):
         """Compute the true load per expert, given the gates.

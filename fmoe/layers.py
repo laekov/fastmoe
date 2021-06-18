@@ -3,6 +3,7 @@ Layers that FMoE provides to users
 """
 import torch
 import torch.nn as nn
+import math
 
 from .functions import prepare_forward
 from .functions import MOEScatter, MOEGather, MOELinear
@@ -33,9 +34,11 @@ class FMoELinear(nn.Module):
         self.rank = rank
         self.weight = nn.Parameter(torch.Tensor(num_expert, out_feat, in_feat))
         if bias:
-            self.bias = nn.Parameter(torch.Tensor(num_expert, out_feat))
+            self.bias = nn.Parameter(torch.zeros(num_expert, out_feat))
         else:
             self.register_parameter("bias", None)
+
+        self.reset_parameters()
 
     def forward(self, inp, fwd_expert_count):
         r"""
@@ -53,6 +56,13 @@ class FMoELinear(nn.Module):
             self.bias is not None,
             self.rank,
         )
+
+    def reset_parameters(self):
+        # Approach is the same as in torch.nn.Linear
+        # https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/linear.py#L88
+        # bias is left to zero, similar as megatron
+
+        torch.nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
 
 def mark_module_parallel_comm(module, comm):
