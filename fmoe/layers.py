@@ -38,7 +38,7 @@ class FMoELinear(nn.Module):
         else:
             self.register_parameter("bias", None)
 
-        self._init_weights()
+        self.reset_parameters()
 
     def forward(self, inp, fwd_expert_count):
         r"""
@@ -57,7 +57,7 @@ class FMoELinear(nn.Module):
             self.rank,
         )
 
-    def _init_weights(self):
+    def reset_parameters(self):
         # Approach is the same as in torch.nn.Linear
         # https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/linear.py#L88
         # bias is left to zero, similar as megatron

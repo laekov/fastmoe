@@ -25,9 +25,9 @@ class NoisyGate(BaseGate):
 
         self.noise_epsilon = 1e-2
 
-        self._init_weights()
+        self.reset_parameters()
 
-    def _init_weights(self):
+    def reset_parameters(self):
         # Approach is the same as in torch.nn.Linear
         # https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/linear.py#L88
 
