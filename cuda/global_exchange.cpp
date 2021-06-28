@@ -81,7 +81,7 @@ public:
         if (rank == 0) {
             ncclGetUniqueId(&ncclID);
         }
-#if defined(TORCH_VERSION) && (TORCH_VERSION_MAJOR > 1 || \
+#if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR > 1 || \
         (TORCH_VERSION_MAJOR == 1 && TORCH_VERSION_MINOR >= 8))
         broadcastUniqueNCCLID(&ncclID,
                 c10d::OpType::SEND,
