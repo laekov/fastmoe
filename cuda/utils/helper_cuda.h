@@ -32,6 +32,7 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifndef HELPER_CUDA_H
 #define HELPER_CUDA_H

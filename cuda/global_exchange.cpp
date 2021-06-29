@@ -81,10 +81,15 @@ public:
         if (rank == 0) {
             ncclGetUniqueId(&ncclID);
         }
+#if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR > 1 || \
+        (TORCH_VERSION_MAJOR == 1 && TORCH_VERSION_MINOR >= 8))
         broadcastUniqueNCCLID(&ncclID,
                 c10d::OpType::SEND,
                 "fastmoe_nccl_comm",
                 rank);
+#else
+        broadcastUniqueNCCLID(&ncclID);
+#endif
         ncclComm_t comm;
         NCCL_SAFE_CALL(ncclCommInitRank(&comm, getSize(), ncclID, rank));
         return comm;
