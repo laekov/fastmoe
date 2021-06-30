@@ -28,7 +28,7 @@ using FastMoE for training.
 The distributed expert feature is disabled by default. If you want to enable
 it, pass environment variable `USE_NCCL=1` to the setup script.
 
-Note that an extra NCCL developer package is needed, which has to be consistant
+Note that an extra NCCL developer package is needed, which has to be consistent
 with your PyTorch's NCCL version, which can be inspected by running
 `torch.cuda.nccl.version()`. The 
 [official PyTorch docker image](https://hub.docker.com/r/pytorch/pytorch) is
