@@ -44,6 +44,7 @@ class FMoETransformerMLP(FMoE):
         d_hidden=4096,
         world_size=1,
         mp_group=None,
+        moe_group=None,
         activation=torch.nn.GELU(),
         gate=NaiveGate,
         top_k=2,
@@ -59,6 +60,7 @@ class FMoETransformerMLP(FMoE):
             top_k=top_k,
             world_size=world_size,
             mp_group=mp_group,
+            moe_group=moe_group,
             gate_hook=gate_hook,
             mask=mask,
             mask_dict=mask_dict

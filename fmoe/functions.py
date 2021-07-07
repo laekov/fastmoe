@@ -10,13 +10,13 @@ import fmoe_cuda
 from .utils import get_torch_default_comm
 
 
-def _ensure_nccl(t, comm=None):
+def _ensure_nccl(t, comm):
     if comm is None:
         comm = get_torch_default_comm()
     fmoe_cuda.ensure_nccl(comm, t)
 
 
-def count_by_gate(gate, num_expert, world_size, require_pos=True):
+def count_by_gate(gate, num_expert, world_size, comm, require_pos=True):
     with torch.no_grad():
         local_expert_count = torch.zeros(
             num_expert * world_size, device=gate.device, dtype=torch.int32
@@ -25,7 +25,7 @@ def count_by_gate(gate, num_expert, world_size, require_pos=True):
         local_expert_count = local_expert_count.long()
 
         if world_size > 1:
-            _ensure_nccl(gate)
+            _ensure_nccl(gate, comm)
             global_expert_count = fmoe_cuda.expert_exchange(
                 local_expert_count, num_expert, world_size
             )
@@ -41,7 +41,7 @@ def count_by_gate(gate, num_expert, world_size, require_pos=True):
     return pos, local_expert_count, global_expert_count
 
 
-def prepare_forward(gate, num_expert, world_size, comm=None):
+def prepare_forward(gate, num_expert, world_size, comm):
     r"""
     Prepare necessary information from gate output for MoE computation.
 
@@ -56,7 +56,7 @@ def prepare_forward(gate, num_expert, world_size, comm=None):
         _ensure_nccl(gate, comm=comm)
 
     pos, local_expert_count, global_expert_count = count_by_gate(gate, 
-            num_expert, world_size)
+            num_expert, world_size, comm)
     with torch.no_grad():
         fwd_expert_count = global_expert_count.view(world_size,
                 num_expert).sum(dim=0)
