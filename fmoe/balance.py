@@ -24,18 +24,5 @@ def update_balance_profile(
     num_expert,
     balance_strategy,
 ):
-    c_e = torch.scatter_add(
-        torch.zeros(num_expert, device=gate_top_k_idx.device),
-        0,
-        gate_top_k_idx,
-        torch.ones_like(gate_top_k_idx, dtype=torch.float),
-    )
-    for key in metrics:
-        balance_dict[key][layer_idx] = metrics[key](c_e)
-    S = gate_top_k_idx.shape[0]
-    if balance_strategy == "gshard":
-        gate_score_all = gate_context
-        m_e = torch.sum(F.softmax(gate_score_all, dim=1), dim=0) / S
-        balance_dict["gshard_loss"][layer_idx] = torch.sum(c_e * m_e) / num_expert / S
-    elif balance_strategy == "noisy":
-        balance_dict["noisy_loss"][layer_idx] = gate_context
+    # Fill in this function to conduct balance related jobs
+    pass

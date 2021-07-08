@@ -16,7 +16,7 @@ def ensure_comm(t, comm):
     fmoe_cuda.ensure_nccl(comm, t)
 
 
-def count_by_gate(gate, num_expert, world_size, comm=None, require_pos=True):
+def count_by_gate(gate, num_expert, world_size, require_pos=True):
     with torch.no_grad():
         local_expert_count = torch.zeros(
             num_expert * world_size, device=gate.device, dtype=torch.int32
@@ -40,7 +40,7 @@ def count_by_gate(gate, num_expert, world_size, comm=None, require_pos=True):
     return pos, local_expert_count, global_expert_count
 
 
-def prepare_forward(gate, num_expert, world_size, comm):
+def prepare_forward(gate, num_expert, world_size):
     r"""
     Prepare necessary information from gate output for MoE computation.
 
@@ -52,7 +52,7 @@ def prepare_forward(gate, num_expert, world_size, comm):
         comm: the communicator of all workers in the expert-parallel group.
     """
     pos, local_expert_count, global_expert_count = count_by_gate(gate, 
-            num_expert, world_size, comm)
+            num_expert, world_size)
     with torch.no_grad():
         fwd_expert_count = global_expert_count.view(world_size,
                 num_expert).sum(dim=0)
