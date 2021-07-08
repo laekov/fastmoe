@@ -27,6 +27,7 @@ class DistributedGroupedDataParallel(nn.Module):
         module,
         mp_group=None,
         dp_group=None,
+        moe_group=None,
         world_group=None,
         auto_allreduce=False,
     ):
@@ -42,6 +43,10 @@ class DistributedGroupedDataParallel(nn.Module):
             self.comms["dp"] = dp_group
         else:
             self.comms["dp"] = get_torch_default_comm()
+        if moe_group is not None:
+            self.comms["moe"] = moe_group
+        else:
+            self.comms["moe"] = get_torch_default_comm()
         if world_group is None:
             self.comms["world"] = get_torch_default_comm()
         else:

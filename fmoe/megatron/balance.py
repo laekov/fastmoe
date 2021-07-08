@@ -5,6 +5,7 @@ import torch
 from fmoe.balance import reset_balance_profile
 from fmoe.balance import update_balance_profile
 from fmoe.utils import get_torch_default_comm
+from .distributed import get_moe_group
 
 
 balance_dict = {}
@@ -101,11 +102,11 @@ def patch_forward_step(forward_step_func):
             torch.cat(loss_list).mean() * args.balance_loss_weight
         )
 
-        # avarage across world group
-        world_group = get_torch_default_comm()
-        world_size = torch.distributed.get_world_size(group=world_group)
+        # avarage across moe group
+        moe_group = get_moe_group()
+        world_size = torch.distributed.get_world_size(group=moe_group)
         averaged_bal_loss = bal_loss.clone().detach()
-        torch.distributed.all_reduce(averaged_bal_loss, group=world_group)
+        torch.distributed.all_reduce(averaged_bal_loss, group=moe_group)
         averaged_bal_loss /= world_size
 
         loss += bal_loss

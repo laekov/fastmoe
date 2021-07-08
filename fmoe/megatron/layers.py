@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from fmoe.transformer import FMoETransformerMLP
 from .balance import reset_gate_hook
 from .balance import generate_megatron_gate_hook
+from .distributed import set_moe_group
 
 
 class _FakeMegatronMLP(nn.Module):
@@ -74,7 +75,7 @@ class MegatronMLP(FMoETransformerMLP):
     communication group `group` to replace the original MLP layer in Megatron.
     """
 
-    def __init__(self, args, group, layer_idx):
+    def __init__(self, args, mp_group, moe_group, layer_idx):
         assert (
             args.seq_length * args.micro_batch_size % args.tensor_model_parallel_size
             == 0
@@ -82,7 +83,7 @@ class MegatronMLP(FMoETransformerMLP):
         if not args.distributed_experts:
             world_size = 1
         else:
-            world_size = args.world_size
+            world_size = args.tensor_model_parallel_size * args.data_parallel_size
         gate = None
         if not args.balance_strategy or args.balance_strategy == "naive":
             from fmoe.gates import NaiveGate
@@ -102,13 +103,15 @@ class MegatronMLP(FMoETransformerMLP):
             gate = SwitchGate
         else:
             assert False, "Undefined balance strategy {}" % (args.balance_strategy)
+
         super().__init__(
             args.num_experts,
             top_k=args.top_k,
             d_model=args.hidden_size,
             d_hidden=args.hidden_hidden_size,
             world_size=world_size,
-            mp_group=group,
+            mp_group=mp_group,
+            moe_group=moe_group,
             expert_dp_comm="none" if args.distributed_experts else "dp",
             gate_hook=generate_megatron_gate_hook(
                 layer_idx, args.num_experts * world_size
@@ -187,8 +190,24 @@ def fmoefy(
     if distributed_experts is not None:
         args.distributed_experts = distributed_experts
 
+    if hasattr(mpu, 'get_tensor_model_parallel_group'):
+        mp_group = mpu.get_tensor_model_parallel_group()
+    else:
+        # For compatibility to older versions of Megatron-LM
+        mp_group = mpu.get_model_parallel_group()
+    if args.pipeline_model_parallel_size == 1:
+        moe_group = None
+    else:
+        # Create a comm prependicular to pipeline group
+        stage_size = args.world_size // args.pipeline_model_parallel_size
+        for i in range(0, args.world_size, stage_size):
+            ranks = range(i, i + stage_size)
+            group = torch.distributed.new_group(ranks)
+            if args.rank in ranks:
+                moe_group = group
+        set_moe_group(moe_group)
     for idx, l in enumerate(model.language_model.transformer.layers):
-        l.mlp = MegatronMLP(args, mpu.get_model_parallel_group(), idx)
+        l.mlp = MegatronMLP(args, mp_group, moe_group, idx)
 
     # initialize gate hook
     num_layers = len(model.language_model.transformer.layers)
