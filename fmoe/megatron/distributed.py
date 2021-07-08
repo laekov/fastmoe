@@ -12,6 +12,10 @@ def set_moe_group(moe_group):
     _moe_group = moe_group
 
 
+def get_moe_group():
+    return _moe_group
+
+
 class DistributedDataParallel(DistributedGroupedDataParallel):
     r"""
     A wrapper that is used to replace the DDP module provided by Megatron, which

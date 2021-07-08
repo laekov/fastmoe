@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import math
 
-from .functions import prepare_forward
+from .functions import prepare_forward, ensure_comm
 from .functions import MOEScatter, MOEGather, MOELinear
 from .functions import AllGather, Slice
 from .gates import NaiveGate
@@ -212,6 +212,8 @@ class FMoE(nn.Module):
         according to the gate.  The score of the selected gate given by the
         expert is multiplied to the experts' output tensors as a weight.
         """
+        if self.world_size > 1:
+            ensure_comm(inp, self.moe_group)
         if self.mp_size > 1:
             inp = Slice.apply(inp, self.mp_rank, self.mp_size, self.mp_group)
 
