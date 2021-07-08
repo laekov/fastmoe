@@ -74,8 +74,7 @@ def mark_module_parallel_comm(module, comm):
         setattr(p, "dp_comm", comm)
 
 
-def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size,
-        comm=None):
+def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
     r"""
     A private function that performs the following steps to complete the MoE
     computation.
@@ -93,7 +92,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size,
         global_expert_count,
         fwd_expert_count,
         fwd_batch_size,
-    ) = prepare_forward(gate, num_expert, world_size, comm)
+    ) = prepare_forward(gate, num_expert, world_size)
     topk = 1
     if len(gate.shape) == 2:
         topk = gate.shape[1]
@@ -219,6 +218,9 @@ class FMoE(nn.Module):
 
         gate_top_k_idx, gate_score = self.gate(inp)
 
+        if self.gate_hook is not None:
+            self.gate_hook(gate_top_k_idx, gate_score, None)
+
         # delete masked tensors
         if self.mask is not None and self.mask_dict is not None:
             mask = self.mask.view(-1)
@@ -227,9 +229,8 @@ class FMoE(nn.Module):
             gate_top_k_idx = gate_top_k_idx[mask == 0, :]
 
         fwd = _fmoe_general_global_forward(
-            inp,
-            gate_top_k_idx,
-            self.expert_fn, self.num_expert, self.world_size, self.moe_group
+            inp, gate_top_k_idx,
+            self.expert_fn, self.num_expert, self.world_size
         )
 
         # recover deleted tensors
