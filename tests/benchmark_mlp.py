@@ -40,7 +40,7 @@ class BruteForceMoE(nn.Module):
     def forward(self, inp):
         if self.pre_lnorm:
             inp = self.layer_norm(inp)
-        gate_top_k_idx, gate_score, _ = self.gate(inp)
+        gate_top_k_idx, gate_score = self.gate(inp)
         inp = inp.repeat_interleave(repeats=self.top_k, dim=0)
         x = self.mlp(inp, gate_top_k_idx, gate_score)
         if not self.pre_lnorm:
@@ -126,11 +126,6 @@ def benchmark_mlp(MOELayer, batch_size, in_feat, hidden_feat, num_expert, top_k)
 
 
 if __name__ == "__main__":
-    os.environ["RANK"] = os.environ.get("OMPI_COMM_WORLD_RANK", "0")
-    os.environ["WORLD_SIZE"] = os.environ.get("OMPI_COMM_WORLD_SIZE", "1")
-    os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get(
-        "OMPI_COMM_WORLD_LOCAL_RANK", "0"
-    )
     if int(os.environ["WORLD_SIZE"]) > 1:
         torch.distributed.init_process_group(backend="nccl")
         rank = torch.distributed.get_rank()
