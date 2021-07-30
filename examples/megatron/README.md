@@ -44,6 +44,15 @@ model parallel model group.
 from fmoe.megatron import DistributedDataParallel as LocalDDP
 ```
 
+### Fix gradient clipping
+
+Megatron-LM uses gradient normalization, which is incompatible with FastMoE.
+Incorrect norm of the gradients lead to inconsistent parameter updates.
+Apply `clip-grad-v2.2.patch` to fix the issue.
+
+Note that only 2-norm is implemented in the patch. If other norm methods is
+used, remember to implement it accordingly.
+
 ### Train as usual
 
 Start traning with FastMoE by using the scripts provided by Megatron-LM.
