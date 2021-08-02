@@ -25,7 +25,8 @@ If applicable, add logs to help explain your problem.
  - Device: [e.g. NVIDIA V100]
  - OS: [e.g. Debian 10.2 buster]
  - CUDA version: [e.g. 11.1]
-- NCCL version: [e.g. 2.7.8-1]
+ - NCCL version: [e.g. 2.7.8-1]
+ - PyTorch version: [e.g. 1.8.0]
 
 **Additional context**
 Add any other context about the problem here.
