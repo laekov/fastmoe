@@ -1,5 +1,5 @@
 diff --git a/megatron/optimizer/clip_grads.py b/megatron/optimizer/clip_grads.py
-index e8d0d02..df898f9 100644
+index e8d0d02..fd6660a 100644
 --- a/megatron/optimizer/clip_grads.py
 +++ b/megatron/optimizer/clip_grads.py
 @@ -52,6 +52,7 @@ def clip_grad_norm_fp32(parameters, max_norm, norm_type=2):
@@ -30,7 +30,7 @@ index e8d0d02..df898f9 100644
          total_norm = max(grad.abs().max() for grad in grads_for_norm)
          total_norm_cuda = torch.cuda.FloatTensor([float(total_norm)])
          # Take max across all model-parallel GPUs.
-@@ -96,7 +101,17 @@ def clip_grad_norm_fp32(parameters, max_norm, norm_type=2):
+@@ -96,7 +101,18 @@ def clip_grad_norm_fp32(parameters, max_norm, norm_type=2):
              # we need the pow(norm-type).
              total_norm = grad_norm ** norm_type
  
@@ -40,11 +40,13 @@ index e8d0d02..df898f9 100644
 +                [grads_in_moe],
 +                False # no per-parameter norm
 +            )
++            grad_norm = grad_norm ** norm_type
 +            torch.distributed.all_reduce(grad_norm)
-+            total_norm += grad_norm ** norm_type
++            total_norm += grad_norm
 +
          else:
 +            # TODO: moe
              for grad in grads_for_norm:
                  grad_norm = torch.norm(grad, norm_type)
                  total_norm += grad_norm ** norm_type
+
