@@ -513,7 +513,7 @@ class AdaptiveEmbedding(nn.Module):
                 l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i+1]
                 d_emb_i = d_embed // (div_val ** i)
                 self.emb_layers.append(nn.Embedding(r_idx-l_idx, d_emb_i))
-                self.emb_projs.append(Projectio(d_proj, d_emb_i))
+                self.emb_projs.append(Projection(d_proj, d_emb_i))
 
     def forward(self, inp):
         if self.div_val == 1:
