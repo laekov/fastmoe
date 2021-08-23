@@ -1,3 +1,44 @@
+## v0.2.1
+
+## Load balancing
+
+* Fix gradient for balance loss.
+
+## Misc
+
+* Typos.
+* Update benchmark interface.
+* Remove some redundant code for performance improvement.
+* Enable `USE_NCCL` by default.
+* Compatibility for PyTorch `<1.8.0` and `>=1.8.0`.
+
+## Megatron adaption
+
+* Patch for numerical correctness of gradient clipping.
+* Support to pipeline parallelism.
+
+## v0.2.0
+
+## Load balancing
+
+* A brand new gate module with capacity-related utilities.
+* GShard's and Switch Transformer's balance strategies are implemented as integrated gates.
+* Balance loss is enabled.
+* Balance monitor is provided.
+
+## Checkpointing
+
+* MoE models can be loaded and saved by fmoe's checkpointing module.
+
+## Performance
+
+* FP16 training performance is improved.
+
+## Misc
+
+* CUDA code directory is reconstructed.
+* More tests are added.
+
 ## v0.1.2
 
 ### Compilation
