@@ -15,7 +15,7 @@ authors = [
         'Qin Li',
 ]
 
-if os.environ.get('USE_NCCL', '0') == '1':
+if os.environ.get('USE_NCCL', '1') == '1':
     cxx_flags.append('-DFMOE_USE_NCCL')
     ext_libs.append('nccl')
 
@@ -23,7 +23,7 @@ if os.environ.get('USE_NCCL', '0') == '1':
 if __name__ == '__main__':
     setuptools.setup(
         name='fastmoe',
-        version='0.2.0',
+        version='0.2.1',
         description='An efficient Mixture-of-Experts system for PyTorch',
         author=', '.join(authors),
         author_email='hja20@mails.tsinghua.edu.cn',
