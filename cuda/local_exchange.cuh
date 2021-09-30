@@ -27,7 +27,12 @@ void fmoe_cuda_assign_pos_impl(
 }
 
 #define PERTHREAD_EXPERTS 256
+
+#ifdef FMOE_USE_HIP
+#define WARP_SIZE 64
+#else
 #define WARP_SIZE 32
+#endif
 
 __global__
 void expert_count_kernel(const long* gate_idx, int* expert_count,
@@ -52,7 +57,11 @@ void expert_count_kernel(const long* gate_idx, int* expert_count,
         int x = res_tmp[i - expert_min];
 #pragma unroll
         for (int j = 1; j < WARP_SIZE; j <<= 1) {
+#ifdef FMOE_USE_HIP
+            x = x + __shfl_down(x, j);
+#else
             x = x + __shfl_down_sync(-1u, x, j);
+#endif
         }
         if (threadIdx.x % WARP_SIZE == 0) {
             atomicAdd(expert_count + i, x);
