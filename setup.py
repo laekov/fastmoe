@@ -1,7 +1,7 @@
 import setuptools
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
-
+import torch
 
 cxx_flags = []
 ext_libs = []
@@ -15,15 +15,20 @@ authors = [
         'Qin Li',
 ]
 
+is_rocm_pytorch = False
+if torch.__version__ >= '1.5':
+    from torch.utils.cpp_extension import ROCM_HOME
+    is_rocm_pytorch = True if ((torch.version.hip is not None) and (ROCM_HOME is not None)) else False
+
 if os.environ.get('USE_NCCL', '1') == '1':
     cxx_flags.append('-DFMOE_USE_NCCL')
-    if os.environ.get('USE_ROCM', '0') == '1':
+    if is_rocm_pytorch:
         ext_libs.append('rccl')
     else:
         ext_libs.append('nccl')
 
-if os.environ.get('USE_ROCM', '0') == '1':
-    define_macros=[('MOE_HIP_DIFF', None)]
+if is_rocm_pytorch:
+    define_macros=[('FMOE_USE_HIP', None)]
 else:
     define_macros=[]
 
