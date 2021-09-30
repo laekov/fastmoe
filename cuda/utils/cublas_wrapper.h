@@ -39,7 +39,11 @@ inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
                                   const __half           *beta,
                                   __half           *Carray[], int ldc,
                                   int batchCount) {
+#ifdef MOE_HIP_DIFF
+    return rocblas_hgemm_batched(handle, transa, transb, m, n, k, (const rocblas_half*)alpha, (const rocblas_half* const*)Aarray, lda, (const rocblas_half* const*)Barray, ldb, (const rocblas_half*)beta, (rocblas_half* const*)Carray, ldc, batchCount);
+#else
     return cublasHgemmBatched(handle, transa, transb, m, n, k, alpha, Aarray, lda, Barray, ldb, beta, Carray, ldc, batchCount);
+#endif
 }
 
 
@@ -73,7 +77,11 @@ inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
                                 const __half *B, int ldb,
                                 const __half *beta,
                                 __half *C, int ldc) {
+#ifdef MOE_HIP_DIFF
+    return rocblas_hgemm(handle, transa, transb, m, n, k, (const rocblas_half*)alpha, (const rocblas_half* )A, lda, (const rocblas_half* )B, ldb, (const rocblas_half*)beta, (rocblas_half* )C, ldc);
+#else
     return cublasHgemm(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+#endif
 }
 
 inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
@@ -84,12 +92,21 @@ inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
                                 const c10::Half *B, int ldb,
                                 const c10::Half *beta,
                                 c10::Half *C, int ldc) {
+#ifdef MOE_HIP_DIFF
+    return rocblas_hgemm(handle, transa, transb, m, n, k, 
+            (const rocblas_half*)alpha, 
+            (const rocblas_half*)A, lda, 
+            (const rocblas_half*)B, ldb, 
+            (const rocblas_half*)beta, 
+            (rocblas_half*)C, ldc);
+#else
     return cublasHgemm(handle, transa, transb, m, n, k, 
             (const __half*)alpha, 
             (const __half*)A, lda, 
             (const __half*)B, ldb, 
             (const __half*)beta, 
             (__half*)C, ldc);
+#endif
 }
 #endif  // CUBLAS_WRAPPER_H
 

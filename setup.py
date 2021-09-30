@@ -17,7 +17,15 @@ authors = [
 
 if os.environ.get('USE_NCCL', '1') == '1':
     cxx_flags.append('-DFMOE_USE_NCCL')
-    ext_libs.append('nccl')
+    if os.environ.get('USE_ROCM', '0') == '1':
+        ext_libs.append('rccl')
+    else:
+        ext_libs.append('nccl')
+
+if os.environ.get('USE_ROCM', '0') == '1':
+    define_macros=[('MOE_HIP_DIFF', None)]
+else:
+    define_macros=[]
 
 
 if __name__ == '__main__':
@@ -41,6 +49,7 @@ if __name__ == '__main__':
                     'cuda/parallel_linear.cu',
                     'cuda/fmoe_cuda.cpp',
                     ],
+                define_macros=define_macros,
                 extra_compile_args={
                     'cxx': cxx_flags,
                     'nvcc': cxx_flags
