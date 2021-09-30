@@ -39,7 +39,7 @@ inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
                                   const __half           *beta,
                                   __half           *Carray[], int ldc,
                                   int batchCount) {
-#ifdef MOE_HIP_DIFF
+#ifdef FMOE_USE_HIP
     return rocblas_hgemm_batched(handle, transa, transb, m, n, k, (const rocblas_half*)alpha, (const rocblas_half* const*)Aarray, lda, (const rocblas_half* const*)Barray, ldb, (const rocblas_half*)beta, (rocblas_half* const*)Carray, ldc, batchCount);
 #else
     return cublasHgemmBatched(handle, transa, transb, m, n, k, alpha, Aarray, lda, Barray, ldb, beta, Carray, ldc, batchCount);
