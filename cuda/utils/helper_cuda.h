@@ -51,7 +51,7 @@ static const char *_cudaGetErrorEnum(CUresult error) {
 }
 #endif
 
-#ifdef MOE_HIP_DIFF
+#ifdef FMOE_USE_HIP
 static const char *_cudaGetErrorEnum(cublasStatus_t error) {
   switch (error) {
     
