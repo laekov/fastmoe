@@ -342,7 +342,8 @@ def _test_fmoe_local_ddp(rank, world_size, mp_group, dp_group, world_group):
     torch.cuda.manual_seed(42 + rank)
 
     model = MyModule().cuda()
-    model_ddp = LocalDDP(deepcopy(model), mp_group, dp_group, world_group)
+    model_ddp = LocalDDP(deepcopy(model),
+            mp_group=mp_group, dp_group=dp_group, world_group=world_group)
     model.set_comm()
     model_ddp.module.set_comm()
 
