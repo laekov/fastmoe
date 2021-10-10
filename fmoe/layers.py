@@ -107,8 +107,8 @@ class FMoE(nn.Module):
             self.slice_size = 1
             self.slice_rank = 0
         else:
-            self.slice_size = slice_group.size()
-            self.slice_rank = slice_group.rank()
+            self.slice_size = self.slice_group.size()
+            self.slice_rank = self.slice_group.rank()
 
         self.top_k = top_k
         if type(expert) is list:

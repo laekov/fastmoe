@@ -15,5 +15,6 @@ from .balance import reset_gate_hook
 from .balance import get_balance_profile
 from .balance import generate_megatron_gate_hook
 from .balance import add_balance_log
-from .balance import patch_forward_step
-from .balance import patch_model_provider
+
+from .patch import patch_forward_step
+from .patch import patch_model_provider
