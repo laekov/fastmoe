@@ -132,34 +132,6 @@ class MOEScatter(Function):
         grad_in = _local_gather(local_grad_in, pos, inp_batch_size)
         return grad_in, None, None, None, None, None
 
-
-class MOELinear(Function):
-    r"""
-    Computes linear operators within one GPU on different experts simutaneously.
-    """
-
-    @staticmethod
-    def forward(ctx, global_input_buf, fwd_expert_count, weight, bias=None):
-        global_output_buf = fmoe_cuda.linear_forward(
-            global_input_buf, fwd_expert_count, weight, bias
-        )
-        variables = (global_input_buf, fwd_expert_count, weight, bias)
-        ctx.save_for_backward(*variables)
-        return global_output_buf
-
-    @staticmethod
-    def backward(ctx, grad_out):
-        (input_buf, fwd_expert_count, weight, bias) = ctx.saved_tensors
-        grad_inp_buf, grad_weight, grad_bias = fmoe_cuda.linear_backward(
-            grad_out, input_buf, fwd_expert_count, weight, bias
-        )
-
-        if not torch.is_tensor(bias):
-            grad_bias = None
-
-        return grad_inp_buf, None, grad_weight, grad_bias
-
-
 class MOEGather(Function):
     r"""
     Gather output samples from contiguous alone experts back to [batch x

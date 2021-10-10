@@ -1,68 +1,14 @@
 r"""
-Layers that FMoE provides to users
+FMoE core layer
 """
 import torch
 import torch.nn as nn
-import math
 
 from .functions import prepare_forward, ensure_comm
-from .functions import MOEScatter, MOEGather, MOELinear
+from .functions import MOEScatter, MOEGather
 from .functions import AllGather, Slice
 from .gates import NaiveGate
 
-
-class FMoELinear(nn.Module):
-    r"""
-    A linear layer that contains multiple experts.
-    As multiple experts can be placed on the same worker, the computation can be
-    performed in parallel to increase the performance.
-    The FMoELinear module provides such function.
-    """
-
-    def __init__(
-        self,
-        num_expert: int,
-        in_feat: int,
-        out_feat: int,
-        bias: bool = True,
-        rank: int = 0,
-    ):
-        super().__init__()
-        self.num_expert = num_expert
-        self.in_feat = in_feat
-        self.out_feat = out_feat
-        self.rank = rank
-        self.weight = nn.Parameter(torch.Tensor(num_expert, out_feat, in_feat))
-        if bias:
-            self.bias = nn.Parameter(torch.zeros(num_expert, out_feat))
-        else:
-            self.register_parameter("bias", None)
-
-        self.reset_parameters()
-
-    def forward(self, inp, fwd_expert_count):
-        r"""
-        Call MOE function
-        """
-        x = MOELinear.apply(inp, fwd_expert_count, self.weight, self.bias)
-        return x
-
-    def extra_repr(self) -> str:
-        return "num_expert={}, in_features={}, \
-        out_features={}, bias={}, rank={}".format(
-            self.num_expert,
-            self.in_feat,
-            self.out_feat,
-            self.bias is not None,
-            self.rank,
-        )
-
-    def reset_parameters(self):
-        # Approach is the same as in torch.nn.Linear
-        # https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/linear.py#L88
-        # bias is left to zero, similar as megatron
-
-        torch.nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
 
 def mark_module_parallel_comm(module, comm):
@@ -121,11 +67,12 @@ class FMoE(nn.Module):
     * `num_expert` stands for the number of experts on **each** worker.
     * `world_size` stands for the total number of workers that contains
     different experts.
-    * `mp_group` can be a torch's communication group, indicating that model
-    parallel is applied across the group, which means that workers in the group
-    hold the same copy of the input feature, and demands the same copy of the
-    output. FMoE saves computation by slicing the input in the mp group and
-    performing all-gather after the MLP computation.
+    * `slice_group` can be a torch's communication group, indicating that
+    specific model parallel is applied across the group, and workers in the
+    group hold the same copy of input feature, and requires the same copy of
+    the output. For each worker, FMoE only computes the output of a certain
+    slice of the input batch, and will all-gather the outputs after
+    computation.  
     * `top_k` stands for the number of experts each token is going to.
     * `gate` is a gate class which can found in `fmoe.gates`.
     * `expert` can be specified as a module class, it is used to generate
@@ -137,7 +84,8 @@ class FMoE(nn.Module):
         num_expert=32,
         d_model=1024,
         world_size=1,
-        mp_group=None,
+        mp_group=None, # being deprecated
+        slice_group=None,
         moe_group=None,
         top_k=2,
         gate=NaiveGate,
@@ -150,13 +98,18 @@ class FMoE(nn.Module):
         self.num_expert = num_expert
         self.d_model = d_model
         self.world_size = world_size
-        self.mp_group = mp_group
-        if mp_group is None:
-            self.mp_size = 1
-            self.mp_rank = 0
+
+        self.slice_group = slice_group
+        if mp_group is not None:
+            print('[Warning] mp_group is being deprecated')
+            self.slice_group = mp_group
+        if self.slice_group is None:
+            self.slice_size = 1
+            self.slice_rank = 0
         else:
-            self.mp_size = mp_group.size()
-            self.mp_rank = mp_group.rank()
+            self.slice_size = slice_group.size()
+            self.slice_rank = slice_group.rank()
+
         self.top_k = top_k
         if type(expert) is list:
             self.experts = nn.ModuleList([e(d_model) for e in expert])
@@ -168,6 +121,7 @@ class FMoE(nn.Module):
             self.experts_fused = False
         else:
             self.experts_fused = True
+
         self.gate = gate(d_model, num_expert, world_size, top_k)
         self.gate_hook = gate_hook
         self.mask = mask
@@ -203,7 +157,7 @@ class FMoE(nn.Module):
                     mark_module_parallel_comm(e, comm)
             else:
                 mark_module_parallel_comm(self.experts, comm)
-        mark_module_parallel_comm(self.gate, "moe")
+        mark_module_parallel_comm(self.gate, "gate")
 
     def forward(self, inp):
         r"""
@@ -213,8 +167,9 @@ class FMoE(nn.Module):
         """
         if self.world_size > 1:
             ensure_comm(inp, self.moe_group)
-        if self.mp_size > 1:
-            inp = Slice.apply(inp, self.mp_rank, self.mp_size, self.mp_group)
+        if self.slice_size > 1:
+            inp = Slice.apply(inp, self.slice_rank,
+                    self.slice_size, self.slice_group)
 
         gate_top_k_idx, gate_score = self.gate(inp)
 
@@ -249,6 +204,7 @@ class FMoE(nn.Module):
         gate_score = gate_score.view(x.shape[0], 1, self.top_k)
         x = torch.bmm(gate_score, x).reshape(-1, self.d_model)
 
-        if self.mp_size > 1:
-            x = AllGather.apply(x, self.mp_rank, self.mp_size, self.mp_group)
+        if self.slice_size > 1:
+            x = AllGather.apply(x, self.slice_rank,
+                    self.slice_size, self.slice_group)
         return x
