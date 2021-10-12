@@ -46,17 +46,23 @@ def patch_forward_step(forward_step_func):
     return forward_step_with_balance_loss
 
 
-def patch_model_provider(model_provider):
+def patch_model_provider(model_provider, gate=None):
     from megatron import get_args
 
     def fmoefied_model_provider():
         from .layers import fmoefy
         args = get_args()
+        hhs = args.hidden_size * 4 
+        assert hhs % args.top_k == 0
+        hhs = hhs // args.top_k 
+        assert hhs % args.tensor_model_parallel_size == 0
+        hhs = hhs // args.tensor_model_parallel_size
         return fmoefy(
             model_provider(),
             num_experts=args.num_experts,
-            hidden_hidden_size=4 * args.hidden_size // args.top_k,
+            hidden_hidden_size=hhs,
             top_k=args.top_k,
+            gate=gate
         )
 
     return fmoefied_model_provider
