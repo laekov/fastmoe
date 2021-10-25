@@ -19,7 +19,7 @@ def _init():
     from megatron import mpu
     args = get_args()
 
-    # Create a comm prependicular to pipeline group as gate group
+    # Create a comm prependicular to the pipeline group as gate group
     stage_size = args.world_size // args.pipeline_model_parallel_size
     for i in range(0, args.world_size, stage_size):
         ranks = range(i, i + stage_size)
