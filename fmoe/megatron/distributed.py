@@ -1,19 +1,36 @@
 r"""
 distributed support for Megatron
 """
+import torch
+
 from fmoe.distributed import DistributedGroupedDataParallel
 
 
-_moe_group = None
+_groups = None
 
 
-def set_moe_group(moe_group):
-    global _moe_group
-    _moe_group = moe_group
+def _set_groups(**kwargs):
+    global _groups
+    _groups = kwargs
 
 
-def get_moe_group():
-    return _moe_group
+def _init():
+    from megatron import get_args
+    from megatron import mpu
+    args = get_args()
+
+    # Create a comm prependicular to the pipeline group as gate group
+    stage_size = args.world_size // args.pipeline_model_parallel_size
+    for i in range(0, args.world_size, stage_size):
+        ranks = range(i, i + stage_size)
+        group = torch.distributed.new_group(ranks)
+        if args.rank in ranks:
+            gate_group = group
+
+    _set_groups(
+            dp_group=mpu.get_data_parallel_group(),
+            moe_group=mpu.get_data_parallel_group(),
+            gate_group=gate_group)
 
 
 class DistributedDataParallel(DistributedGroupedDataParallel):
@@ -24,14 +41,9 @@ class DistributedDataParallel(DistributedGroupedDataParallel):
     """
 
     def __init__(self, module):
-        from megatron import mpu
-
-        super().__init__(
-            module,
-            mp_group=mpu.get_model_parallel_group(),
-            dp_group=mpu.get_data_parallel_group(),
-            moe_group=_moe_group
-        )
+        if _groups is None:
+            _init()
+        super().__init__(module, **_groups)
 
     def state_dict(self, *args, **kwargs):
         r"""

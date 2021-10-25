@@ -3,8 +3,8 @@ Adaption to act as the MLP layer using an MoE MLP layer in transformer.
 """
 import torch
 import torch.nn as nn
-from .gates import NaiveGate
-from .layers import FMoE, FMoELinear
+from .layers import FMoE
+from .linear import FMoELinear
 
 
 class _Expert(nn.Module):
@@ -42,31 +42,14 @@ class FMoETransformerMLP(FMoE):
         num_expert=32,
         d_model=1024,
         d_hidden=4096,
-        world_size=1,
-        mp_group=None,
-        moe_group=None,
         activation=torch.nn.GELU(),
-        gate=NaiveGate,
-        top_k=2,
         expert_dp_comm="none",
-        gate_hook=None,
-        mask=None,
-        mask_dict=None,
+        expert_rank=0,
+        **kwargs
     ):
-        super().__init__(
-            num_expert=num_expert,
-            d_model=d_model,
-            gate=gate,
-            top_k=top_k,
-            world_size=world_size,
-            mp_group=mp_group,
-            moe_group=moe_group,
-            gate_hook=gate_hook,
-            mask=mask,
-            mask_dict=mask_dict
-        )
+        super().__init__(num_expert=num_expert, d_model=d_model, **kwargs)
         self.experts = _Expert(
-            num_expert, d_model, d_hidden, activation, rank=self.mp_rank
+            num_expert, d_model, d_hidden, activation, rank=expert_rank
         )
         self.mark_parallel_comm(expert_dp_comm)
 

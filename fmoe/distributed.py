@@ -25,11 +25,8 @@ class DistributedGroupedDataParallel(nn.Module):
     def __init__(
         self,
         module,
-        mp_group=None,
-        dp_group=None,
-        moe_group=None,
-        world_group=None,
         auto_allreduce=False,
+        **kwargs
     ):
         assert not auto_allreduce, "Automatic all-reduce is not implemented yet"
 
@@ -37,20 +34,12 @@ class DistributedGroupedDataParallel(nn.Module):
         self.module = module
 
         self.comms = dict()
-        if mp_group is not None:
-            self.comms["mp"] = mp_group
-        if dp_group is not None:
-            self.comms["dp"] = dp_group
-        else:
-            self.comms["dp"] = get_torch_default_comm()
-        if moe_group is not None:
-            self.comms["moe"] = moe_group
-        else:
-            self.comms["moe"] = get_torch_default_comm()
-        if world_group is None:
-            self.comms["world"] = get_torch_default_comm()
-        else:
-            self.comms["world"] = world_group
+        for k in kwargs:
+            if k.endswith('_group'):
+                self.comms[k[:-6]] = kwargs[k]
+        for k in ['dp', 'gate', 'moe', 'world']:
+            if k not in self.comms:
+                self.comms[k] = get_torch_default_comm()
 
         def allreduce_params(no_scale=False,
                 reduce_after=False, fp32_allreduce=False):
