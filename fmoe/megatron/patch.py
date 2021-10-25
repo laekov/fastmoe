@@ -1,6 +1,9 @@
 r"""
 Patching some of Megatron-LM's functions to create an MoE model
 """
+import torch
+
+
 def patch_forward_step(forward_step_func):
     r"""
     Patch model's forward_step_func to support balance loss
