@@ -2,30 +2,11 @@
 #ifdef FMOE_USE_NCCL
 
 void fmoe_cuda_expert_exchange_impl(
-        const long* local_expert_count, 
-        long* global_expert_count, 
+        const long* local_expert_count,
+        long* global_expert_count,
         int n_expert, int world_size,
-        CudaStreamManager* smgr) {
-    NCCL_SAFE_CALL(ncclGroupStart());
-    for (int i = 0; i < world_size; ++i) {
-        NCCL_SAFE_CALL(ncclSend(
-                local_expert_count + n_expert * i,
-                n_expert,
-                ncclInt64,
-                i,
-                smgr->ncclcomm,
-                smgr->stream(0)));
-        NCCL_SAFE_CALL(ncclRecv(
-                global_expert_count + n_expert * i,
-                n_expert,
-                ncclInt64,
-                i,
-                smgr->ncclcomm,
-                smgr->stream(0)));
-    }
-    NCCL_SAFE_CALL(ncclGroupEnd());
-    smgr->sync(1);
-}
+        CudaStreamManager* smgr);
+
 
 template<typename scalar_t>
 void fmoe_cuda_global_scatter_impl(
@@ -50,9 +31,9 @@ void fmoe_cuda_global_scatter_impl(
             int idx = i + j * n_expert;
             if (local_expert_count[idx]) {
                 NCCL_SAFE_CALL(ncclSend(
-                        local_input_buf + expert_ptr[idx] * in_feat, 
+                        local_input_buf + expert_ptr[idx] * in_feat,
                         local_expert_count[idx] * in_feat * sizeof(scalar_t),
-                        ncclChar, 
+                        ncclChar,
                         j,
                         smgr->ncclcomm,
                         smgr->stream(0)));
@@ -106,9 +87,9 @@ void fmoe_cuda_global_gather_impl(
             }
             if (local_expert_count[idx]) {
                 NCCL_SAFE_CALL(ncclRecv(
-                        local_output_buf + expert_ptr[idx] * out_feat, 
+                        local_output_buf + expert_ptr[idx] * out_feat,
                         local_expert_count[idx] * out_feat * sizeof(scalar_t),
-                        ncclChar, 
+                        ncclChar,
                         j,
                         smgr->ncclcomm,
                         smgr->stream(0)));
