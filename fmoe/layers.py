@@ -128,9 +128,6 @@ class FMoE(nn.Module):
         self.mask_dict = mask_dict
         self.moe_group = moe_group
 
-        if hasattr(self.gate, 'requires_moe_group'):
-            setattr(self.gate, 'moe_gruop', self.moe_group)
-
     def expert_fn(self, inp, fwd_expert_count):
         r"""
         The default expert function which either calls the experts as a whole

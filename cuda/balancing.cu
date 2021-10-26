@@ -1,3 +1,4 @@
+#include <cstdio>
 #include "balancing.cuh"
 #include "global_exchange.h"
 #include <torch/extension.h>
@@ -88,7 +89,9 @@ std::vector<torch::Tensor> _swipe_once(
     ncclCommUserRank(smgr->ncclcomm, &rank);
     cudaSetDevice(device_idx);
 
-    auto cap = capacity.item<long>();
+    auto capacity_new = capacity.clone();
+    auto cap = capacity_new.item<long>();
+    // fprintf(stderr, "%d initial cap %ld ws %ld ne %ld\n", rank, cap, n_worker, n_expert);
 
     long batch_size = gate_idx.size(0);
     auto gate_idx_cpu = gate_idx.cpu();
@@ -98,16 +101,17 @@ std::vector<torch::Tensor> _swipe_once(
     long *lec = new long[n_worker];
     memset(lec, 0, n_worker * sizeof(long));
     for (long i = 0; i < batch_size; ++i) {
-        ++lec[gidx[i] % n_expert];
+        ++lec[gidx[i] / n_expert];
     }
     long *d_lec = _h2d(lec, n_worker), *d_gec = _cudamalloc<long>(n_worker);
     fmoe_cuda_expert_exchange_impl(d_lec, d_gec, 1, n_worker, smgr);
-    long *gec = _d2h(d_gec, n_expert);
+    long *gec = _d2h(d_gec, n_worker);
+    // fprintf(stderr, "%d initial ec, lec %ld %ld, gec %ld %ld\n", rank, lec[0], lec[1], gec[0], gec[1]);
 
     /* Limit number of incoming samples */
     long *drop_count = new long[n_worker];
     memset(drop_count, 0, n_worker * sizeof(long));
-    for (long i = 0; i < n_expert; ++i) {
+    for (long i = 0; i < n_worker; ++i) {
         if (cap >= gec[i]) {
             drop_count[i] = 0;
             cap -= gec[i];
@@ -118,10 +122,11 @@ std::vector<torch::Tensor> _swipe_once(
         }
     }
 
+    // fprintf(stderr, "%d before exchange cap %ld, drop count %ld %ld, lgec %ld %ld\n", rank, cap, drop_count[0], drop_count[1], gec[0], gec[1]);
     /* Send limit information back */
     _h2d(gec, d_gec, n_worker);
-    fmoe_cuda_expert_exchange_impl(d_gec, d_lec, 1, n_expert, smgr);
-    _d2h(d_lec, lec, n_expert);
+    fmoe_cuda_expert_exchange_impl(d_gec, d_lec, 1, n_worker, smgr);
+    _d2h(d_lec, lec, n_worker);
 
     auto d_dropcount = _h2d(drop_count, n_worker);
     ncclAllReduce(d_dropcount, d_dropcount, n_worker, ncclInt64, ncclSum,
@@ -129,12 +134,14 @@ std::vector<torch::Tensor> _swipe_once(
     _d2h(d_dropcount, drop_count, n_worker);
 
     auto d_gcap = _cudamalloc<long>(n_worker);
-    _h2d(d_gcap + rank, &cap, n_worker);
+    _h2d(&cap, d_gcap + rank, 1);
     ncclAllGather(d_gcap + rank, d_gcap, 1, ncclInt64,
             smgr->ncclcomm, smgr->stream());
     auto gcap = _d2h(d_gcap, n_worker);
+    cudaDeviceSynchronize();
 
-    /* Re-assign counts */
+    // fprintf(stderr, "%d exchange fin, drop count %ld %ld, nlec %ld %ld, gcap %ld %ld\n", rank, drop_count[0], drop_count[1], lec[0], lec[1], gcap[0], gcap[1]);
+    /* Re-assign and update counters */
     for (long i = 0, j = 0; i < n_worker; ++i) {
         while (drop_count[i] > 0) {
             if (drop_count[i] > gcap[j]) {
@@ -148,8 +155,9 @@ std::vector<torch::Tensor> _swipe_once(
             }
         }
     }
+    // fprintf(stderr, "%d update done, lec %ld %ld, gec %ld %ld, gcap %ld %ld\n", rank, lec[0], lec[1], gec[0], gec[1], gcap[0], gcap[1]);
     for (long i = 0; i < batch_size; ++i) {
-        auto widx = gidx[i] % n_expert;
+        auto widx = gidx[i] / n_expert;
         if (lec[widx] > 0) {
             --lec[widx];
         } else {
@@ -162,9 +170,22 @@ std::vector<torch::Tensor> _swipe_once(
         }
         for (; lec[k] == 0; ++k);
         --lec[gidx[i] = k * n_expert + bias];
+        // fprintf(stderr, "%d: assign %ld to %ld\n", rank, i, k);
     }
+    *capacity_new.data_ptr<long>() = cap;
+    // fprintf(stderr, "%d all done\n", rank);
 
-    return {gate_idx_cpu, capacity};
+    delete [] drop_count;
+    delete [] lec;
+    delete [] gec;
+    delete [] gcap;
+
+    cudaFree(d_dropcount);
+    cudaFree(d_lec);
+    cudaFree(d_gec);
+    cudaFree(d_gcap);
+
+    return {gate_idx_cpu, capacity_new};
 }
 
 #undef UPDATE_COUNTERS
