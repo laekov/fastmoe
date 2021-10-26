@@ -95,6 +95,9 @@ class MegatronMLP(FMoETransformerMLP):
         elif args.balance_strategy == "switch":
             from fmoe.gates import SwitchGate
             gate = SwitchGate
+        elif args.balance_strategy == "swipe":
+            from fmoe.gates import SwipeGate
+            gate = SwipeGate
         elif gate is None:
             assert False, "Undefined balance strategy {}" % (args.balance_strategy)
 

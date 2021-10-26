@@ -51,9 +51,12 @@ def add_balance_log(model, writer, iteration):
     while hasattr(model, 'module'):
         model = model.module
 
-    balance_dict_tensor = torch.vstack(
-        [l.mlp.gate.get_loss(clear=True) for l in model.language_model.transformer.layers]
-    ).detach()
+    losses = [l.mlp.gate.get_loss(clear=True)
+            for l in model.language_model.transformer.layers
+            if l.mlp.gate.has_loss]
+    if len(losses) == 0:
+        return
+    balance_dict_tensor = torch.vstack(losses).detach()
     world_group = get_torch_default_comm()
     world_size = torch.distributed.get_world_size(group=world_group)
     torch.distributed.all_reduce(balance_dict_tensor, group=world_group)
