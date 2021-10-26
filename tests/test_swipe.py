@@ -42,7 +42,6 @@ def _test_swipe_gate(d_model, batch_size, n_expert, top_k):
     topk_idx, topk_val = gate(x)
 
 
-@pytest.mark.parametrize("d_model", [1024])
 @pytest.mark.parametrize("batch_size", [16])
 @pytest.mark.parametrize("n_expert", [1, 4])
 @pytest.mark.parametrize("world_size", [2, 4, 8])
@@ -65,16 +64,16 @@ def _test_swipe_once(batch_size, n_expert):
     world_size = dist.get_world_size()
     gate = SwipeGate(4, n_expert, dist.get_world_size()).cuda()
     idx = torch.randint(0, n_expert * world_size, (batch_size,)).cuda()
-    capacity = torch.scalar_tensor(batch_size, dtype=torch.long)
+    capacity = torch.scalar_tensor(batch_size * 2, dtype=torch.long)
     ensure_comm(idx, None)
-    sys.stderr.write('{} Before swipe gate {}, capacity {}\n'.format(rank, idx, capacity))
     new_idx, new_cap = gate.swipe_once(idx, capacity, 0)
-    sys.stderr.write('{} final gte {}, cap {}\n'.format(rank, new_idx, new_cap))
+    idx = torch.randint(0, n_expert * world_size, (batch_size,)).cuda()
+    new_idx, new_cap = gate.swipe_once(idx, new_cap, 0)
 
 if __name__ == '__main__':
     if len(sys.argv) >= 3:
         args = json.loads(sys.argv[2])
         locals()[sys.argv[1]](**args)
     else:
-        # test_swipe_gate(8, 4, 8, 4, 2)
-        test_swipe_once(8, 8, 4)
+        test_swipe_gate(8, 4, 8, 4, 2)
+        # test_swipe_once(8, 800, 4)

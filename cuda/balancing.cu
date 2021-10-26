@@ -91,7 +91,6 @@ std::vector<torch::Tensor> _swipe_once(
 
     auto capacity_new = capacity.clone();
     auto cap = capacity_new.item<long>();
-    // fprintf(stderr, "%d initial cap %ld ws %ld ne %ld\n", rank, cap, n_worker, n_expert);
 
     long batch_size = gate_idx.size(0);
     auto gate_idx_cpu = gate_idx.cpu();
@@ -106,7 +105,6 @@ std::vector<torch::Tensor> _swipe_once(
     long *d_lec = _h2d(lec, n_worker), *d_gec = _cudamalloc<long>(n_worker);
     fmoe_cuda_expert_exchange_impl(d_lec, d_gec, 1, n_worker, smgr);
     long *gec = _d2h(d_gec, n_worker);
-    // fprintf(stderr, "%d initial ec, lec %ld %ld, gec %ld %ld\n", rank, lec[0], lec[1], gec[0], gec[1]);
 
     /* Limit number of incoming samples */
     long *drop_count = new long[n_worker];
@@ -122,7 +120,6 @@ std::vector<torch::Tensor> _swipe_once(
         }
     }
 
-    // fprintf(stderr, "%d before exchange cap %ld, drop count %ld %ld, lgec %ld %ld\n", rank, cap, drop_count[0], drop_count[1], gec[0], gec[1]);
     /* Send limit information back */
     _h2d(gec, d_gec, n_worker);
     fmoe_cuda_expert_exchange_impl(d_gec, d_lec, 1, n_worker, smgr);
@@ -138,9 +135,7 @@ std::vector<torch::Tensor> _swipe_once(
     ncclAllGather(d_gcap + rank, d_gcap, 1, ncclInt64,
             smgr->ncclcomm, smgr->stream());
     auto gcap = _d2h(d_gcap, n_worker);
-    cudaDeviceSynchronize();
 
-    // fprintf(stderr, "%d exchange fin, drop count %ld %ld, nlec %ld %ld, gcap %ld %ld\n", rank, drop_count[0], drop_count[1], lec[0], lec[1], gcap[0], gcap[1]);
     /* Re-assign and update counters */
     for (long i = 0, j = 0; i < n_worker; ++i) {
         while (drop_count[i] > 0) {
@@ -155,7 +150,6 @@ std::vector<torch::Tensor> _swipe_once(
             }
         }
     }
-    // fprintf(stderr, "%d update done, lec %ld %ld, gec %ld %ld, gcap %ld %ld\n", rank, lec[0], lec[1], gec[0], gec[1], gcap[0], gcap[1]);
     for (long i = 0; i < batch_size; ++i) {
         auto widx = gidx[i] / n_expert;
         if (lec[widx] > 0) {
@@ -169,11 +163,10 @@ std::vector<torch::Tensor> _swipe_once(
             continue;
         }
         for (; lec[k] == 0; ++k);
-        --lec[gidx[i] = k * n_expert + bias];
-        // fprintf(stderr, "%d: assign %ld to %ld\n", rank, i, k);
+        --lec[k];
+        gidx[i] = k * n_expert + bias;
     }
     *capacity_new.data_ptr<long>() = cap;
-    // fprintf(stderr, "%d all done\n", rank);
 
     delete [] drop_count;
     delete [] lec;
