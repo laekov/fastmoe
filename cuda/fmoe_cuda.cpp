@@ -52,6 +52,9 @@ torch::Tensor _limit_by_capacity(
 torch::Tensor _prune_gate_by_capacity(
         torch::Tensor gate_idx, torch::Tensor expert_count,
         long n_expert, long n_worker);
+std::vector<torch::Tensor> _swipe_once(
+        torch::Tensor gate_idx, torch::Tensor capacity_tensor,
+        long n_expert, long n_worker, long bias);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef FMOE_USE_NCCL
@@ -59,6 +62,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("global_scatter", &_global_scatter, "FastMoE global scatter (CUDA)");
     m.def("global_gather", &_global_gather, "FastMoE global gather (CUDA)");
     m.def("ensure_nccl", &_ensure_nccl, "FastMoE ensure torch nccl comm");
+    m.def("swipe_once", &_swipe_once, "SWIPE balance strategy(CUDA)");
 #endif
 
     m.def("expert_count", &_expert_count, "FastMoE count gate indices (CUDA)");

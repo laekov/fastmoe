@@ -20,15 +20,19 @@ def patch_forward_step(forward_step_func):
         args = get_args()
         output = forward_step_func(data_iterator, model, input_tensor)
 
-        if not is_pipeline_last_stage() or not args.balance_strategy or args.balance_strategy == 'naive':
+        if not is_pipeline_last_stage() or not args.balance_strategy:
             return output
-        loss_name = args.balance_strategy + "_loss"
 
         while hasattr(model, 'module'):
             model = model.module
 
         loss_list = [l.mlp.gate.get_loss(clear=False).view(1)
-                for l in model.language_model.transformer.layers]
+                for l in model.language_model.transformer.layers
+                if l.mlp.gate.has_loss]
+        if len(loss_list) == 0:
+            return output
+
+        loss_name = args.balance_strategy + "_loss"
         (loss, state_dict), bal_loss = (
             output,
             torch.cat(loss_list).mean() * args.balance_loss_weight

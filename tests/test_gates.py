@@ -9,17 +9,7 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from fmoe.gates import GShardGate, SwitchGate
-from test_ddp import _run_distributed
-
-
-def _ensure_initialized():
-    if not dist.is_initialized():
-        os.environ["RANK"] = os.environ.get("OMPI_COMM_WORLD_RANK", "0")
-        os.environ["WORLD_SIZE"] = os.environ.get("OMPI_COMM_WORLD_SIZE", "1")
-        os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["RANK"]
-        os.environ["MASTER_ADDR"] = os.environ.get("MASTER_ADDR", "localhost")
-        os.environ["MASTER_PORT"] = os.environ.get("MASTER_PORT", "12211")
-        dist.init_process_group(backend="nccl")
+from test_ddp import _ensure_initialized, _run_distributed
 
 
 @pytest.mark.parametrize("d_model", [1024])

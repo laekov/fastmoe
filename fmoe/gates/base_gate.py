@@ -23,3 +23,7 @@ class BaseGate(nn.Module):
         if clear:
             self.loss = None
         return loss
+
+    @property
+    def has_loss(self):
+        return self.loss is not None

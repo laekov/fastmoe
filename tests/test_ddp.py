@@ -5,10 +5,21 @@ from typing import Dict
 
 import pytest
 import torch
+import torch.distributed as dist
 
 from test_numerical import test_fmoe as _test_fmoe
 from test_numerical import test_fmoe_linear as _test_fmoe_linear
 from test_numerical import _test_fmoe_local_ddp
+
+
+def _ensure_initialized():
+    if not dist.is_initialized():
+        os.environ["RANK"] = os.environ.get("OMPI_COMM_WORLD_RANK", "0")
+        os.environ["WORLD_SIZE"] = os.environ.get("OMPI_COMM_WORLD_SIZE", "1")
+        os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["RANK"]
+        os.environ["MASTER_ADDR"] = os.environ.get("MASTER_ADDR", "localhost")
+        os.environ["MASTER_PORT"] = os.environ.get("MASTER_PORT", "12211")
+        dist.init_process_group(backend="nccl")
 
 
 def _run_distributed(func, world_size, args: Dict, script=__file__):

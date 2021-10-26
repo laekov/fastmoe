@@ -5,6 +5,33 @@
 #ifdef FMOE_USE_NCCL
 #include <nccl.h>
 
+
+void fmoe_cuda_expert_exchange_impl(
+        const long* local_expert_count,
+        long* global_expert_count,
+        int n_expert, int world_size,
+        CudaStreamManager* smgr) {
+    NCCL_SAFE_CALL(ncclGroupStart());
+    for (int i = 0; i < world_size; ++i) {
+        NCCL_SAFE_CALL(ncclSend(
+                local_expert_count + n_expert * i,
+                n_expert,
+                ncclInt64,
+                i,
+                smgr->ncclcomm,
+                smgr->stream(0)));
+        NCCL_SAFE_CALL(ncclRecv(
+                global_expert_count + n_expert * i,
+                n_expert,
+                ncclInt64,
+                i,
+                smgr->ncclcomm,
+                smgr->stream(0)));
+    }
+    NCCL_SAFE_CALL(ncclGroupEnd());
+    smgr->sync(1);
+}
+
 torch::Tensor _expert_exchange(
         torch::Tensor local_expert_count,
         long n_expert, long n_workers) {
@@ -31,7 +58,7 @@ torch::Tensor _global_scatter(
     auto global_input_buf = input_buf.new_empty({batch_size, in_feat});
     auto smgr = getCudaStreamManager(input_buf.device().index());
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), 
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(),
             "fmoe_cuda_global_scatter", ([&] {
         fmoe_cuda_global_scatter_impl<scalar_t>(
             input_buf.data_ptr<scalar_t>(),
@@ -57,7 +84,7 @@ torch::Tensor _global_gather(
     auto local_output_buf = output_buf.new_empty({batch_size, out_feat});
     auto smgr = getCudaStreamManager(output_buf.device().index());
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(output_buf.scalar_type(), 
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(output_buf.scalar_type(),
             "fmoe_cuda_global_gather", ([&] {
         fmoe_cuda_global_gather_impl<scalar_t>(
             output_buf.data_ptr<scalar_t>(),
