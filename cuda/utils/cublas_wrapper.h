@@ -93,18 +93,18 @@ inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
                                 const c10::Half *beta,
                                 c10::Half *C, int ldc) {
 #ifdef FMOE_USE_HIP
-    return rocblas_hgemm(handle, transa, transb, m, n, k, 
-            (const rocblas_half*)alpha, 
-            (const rocblas_half*)A, lda, 
-            (const rocblas_half*)B, ldb, 
-            (const rocblas_half*)beta, 
+    return rocblas_hgemm(handle, transa, transb, m, n, k,
+            (const rocblas_half*)alpha,
+            (const rocblas_half*)A, lda,
+            (const rocblas_half*)B, ldb,
+            (const rocblas_half*)beta,
             (rocblas_half*)C, ldc);
 #else
-    return cublasHgemm(handle, transa, transb, m, n, k, 
-            (const __half*)alpha, 
-            (const __half*)A, lda, 
-            (const __half*)B, ldb, 
-            (const __half*)beta, 
+    return cublasHgemm(handle, transa, transb, m, n, k,
+            (const __half*)alpha,
+            (const __half*)A, lda,
+            (const __half*)B, ldb,
+            (const __half*)beta,
             (__half*)C, ldc);
 #endif
 }
