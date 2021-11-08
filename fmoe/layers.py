@@ -72,7 +72,7 @@ class FMoE(nn.Module):
     group hold the same copy of input feature, and requires the same copy of
     the output. For each worker, FMoE only computes the output of a certain
     slice of the input batch, and will all-gather the outputs after
-    computation.  
+    computation.
     * `top_k` stands for the number of experts each token is going to.
     * `gate` is a gate class which can found in `fmoe.gates`.
     * `expert` can be specified as a module class, it is used to generate

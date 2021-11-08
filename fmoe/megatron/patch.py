@@ -59,9 +59,9 @@ def patch_model_provider(model_provider, gate=None):
     def fmoefied_model_provider():
         from .layers import fmoefy
         args = get_args()
-        hhs = args.hidden_size * 4 
+        hhs = args.hidden_size * 4
         assert hhs % args.top_k == 0
-        hhs = hhs // args.top_k 
+        hhs = hhs // args.top_k
         assert hhs % args.tensor_model_parallel_size == 0
         hhs = hhs // args.tensor_model_parallel_size
         return fmoefy(

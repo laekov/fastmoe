@@ -1,10 +1,37 @@
+## v0.3.0
+
+### FMoE core
+
+* Previous `mp_group` is renamed to `slice_group`, indicating that all workers in the group receive the same input batch, and process a slice of the input. `mp_group` will be deprecated in our next release.
+* ROCm supported.
+* `FMoELinear` is moved to a stand-alone file.
+
+### Groupped data parallel
+
+* Support any group name by their relative tag name.
+
+###  Load balancing
+
+* A brand new balancing strategy - SWIPE. Contributed by authors of a (currently unpublished) paper.
+* A property `has_loss` is added to each gate, in order to identify whether balance loss should be collected.
+
+### Megatron-LM support
+
+* Experts are partitioned by tensor model parallelism in `mp_group`, instead of expert parallelism.
+* Support arbitrary customized gate in `MegatronMLP`.
+* Move the patches to a stand-alone file.
+
+### Tests
+
+* Move util functions into `test_ddp.py`.
+
 ## v0.2.1
 
 ## Load balancing
 
 * Fix gradient for balance loss.
 
-## Misc
+### Misc
 
 * Typos.
 * Update benchmark interface.
@@ -12,7 +39,7 @@
 * Enable `USE_NCCL` by default.
 * Compatibility for PyTorch `<1.8.0` and `>=1.8.0`.
 
-## Megatron adaption
+### Megatron adaption
 
 * Patch for numerical correctness of gradient clipping.
 * Support to pipeline parallelism.
