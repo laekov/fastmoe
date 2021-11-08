@@ -2,7 +2,7 @@
 
 ### FMoE core
 
-* Previous `mp_group` is renamed to `slice_gruop`, indicating that all workers in the group receive the same input batch, and process a slice of the input. `mp_gruop` will be deprecated in our next release.
+* Previous `mp_group` is renamed to `slice_group`, indicating that all workers in the group receive the same input batch, and process a slice of the input. `mp_group` will be deprecated in our next release.
 * ROCm supported.
 * `FMoELinear` is moved to a stand-alone file.
 
