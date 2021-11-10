@@ -110,7 +110,7 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                 weights.append(weight_i)
                 biases.append(bias_i)
 
-            head_weight, head_bias, head_proj = weights[0], biases[0], self.out_projs[0].weight
+            head_weight, head_bias, head_proj = weights[0], biases[0], self.out_projs[0].weight if self.out_projs[0] is not None else None
 
             head_logit = self._compute_logit(hidden, head_weight, head_bias, head_proj)
             head_logprob = F.log_softmax(head_logit, dim=1)
@@ -135,7 +135,7 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                 if i == 0:
                     logprob_i = head_logprob_i.gather(1, target_i[:,None]).squeeze(1)
                 else:
-                    weight_i, bias_i, proj_i = weights[i], biases[i], self.out_projs[i].weight
+                    weight_i, bias_i, proj_i = weights[i], biases[i], self.out_projs[i].weight if self.out_projs[i] is not None else None
 
                     hidden_i = hidden.index_select(0, indices_i)
 
