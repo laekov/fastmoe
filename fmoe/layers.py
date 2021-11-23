@@ -43,37 +43,35 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
     if len(gate.shape) == 2:
         topk = gate.shape[1]
 
-    def scatter_func(inp_tensor):
-        tensor = MOEScatter.apply(
-            inp_tensor,
+    def scatter_func(tensor):
+        return MOEScatter.apply(
+            tensor,
             pos // topk,
             local_expert_count,
             global_expert_count,
             fwd_batch_size,
             world_size,
         )
-        return tensor
 
     x = tree.map_structure(scatter_func, inp)
 
     x = expert_fn(x, fwd_expert_count)
 
-    out_batch_size = inp.shape[0]
+    out_batch_size = tree.flatten(inp)[0].shape[0]
     if len(gate.shape) == 2:
         out_batch_size *= gate.shape[1]
 
-    def gatter_func(outp_tensor):
-        tensor = MOEGather.apply(
-            outp_tensor,
+    def gather_func(tensor):
+        return MOEGather.apply(
+            tensor,
             pos,
             local_expert_count,
             global_expert_count,
             out_batch_size,
             world_size,
         )
-        return tensor
 
-    outp = tree.map_structure(gatter_func, x)
+    outp = tree.map_structure(gather_func, x)
     return outp
 
 
