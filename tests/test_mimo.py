@@ -163,4 +163,5 @@ if __name__ == "__main__":
         dp_group=None,
         world_group=None,
         data_type=torch.float32,
+        list_input=True
     )
