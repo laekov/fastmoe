@@ -173,7 +173,7 @@ class FMoE(nn.Module):
                 mark_module_parallel_comm(self.experts, comm)
         mark_module_parallel_comm(self.gate, "gate")
 
-    def forward(self, moe_inp, non_moe_inp=None):
+    def forward(self, moe_inp):
         r"""
         The FMoE module first computes gate output, and then conduct MoE forward
         according to the gate.  The score of the selected gate given by the
