@@ -38,5 +38,5 @@ class NaiveGate(BaseGate):
         gate_score = F.softmax(gate_top_k_val, dim=-1)
 
         if return_all_scores:
-            return gate_top_k_idx, gate_top_k_val, gate
-        return gate_top_k_idx, gate_top_k_val
+            return gate_top_k_idx, gate_score, gate
+        return gate_top_k_idx, gate_score
