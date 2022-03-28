@@ -14,7 +14,7 @@ class GShardGate(NaiveGate):
         assert topk == 2, 'topk should be 2 in gshard'
         super().__init__(d_model, num_expert, world_size, top_k=2)
         self.capacity = capacity
-        self.random_routing = True
+        self.random_routing = random_routing
 
     def forward(self, x):
         naive_outs = super().forward(x, return_all_scores=True)
