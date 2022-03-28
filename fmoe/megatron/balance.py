@@ -46,6 +46,9 @@ def generate_megatron_gate_hook(layer_idx, num_expert_global):
 
 
 def add_balance_log(model, writer, iteration):
+    r"""
+    Note that this function does not work with pipeline parallelism
+    """
     from megatron import is_last_rank
 
     while hasattr(model, 'module'):

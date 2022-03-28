@@ -162,9 +162,6 @@ def fmoefy(
     they are trained in data-parallel mode. This can be useful when testing on
     small models that do not require high training throughput or large parameter
     capacity.
-    Note that pipeline parallel is not supported yet. When distributed experts
-    are enabled, their communicator should be Megatron's
-    tensor_model_parall_comm x data_parallel_comm, which is not created.
     """
     from megatron import get_args
 
