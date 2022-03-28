@@ -1,4 +1,5 @@
 import json
+import random
 import os
 import sys
 from typing import Dict
@@ -13,30 +14,34 @@ from test_numerical import _test_fmoe_local_ddp
 
 
 def _ensure_initialized():
-    if not dist.is_initialized():
+    if 'RANK' not in os.environ:
         os.environ["RANK"] = os.environ.get("OMPI_COMM_WORLD_RANK", "0")
         os.environ["WORLD_SIZE"] = os.environ.get("OMPI_COMM_WORLD_SIZE", "1")
         os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["RANK"]
         os.environ["MASTER_ADDR"] = os.environ.get("MASTER_ADDR", "localhost")
         os.environ["MASTER_PORT"] = os.environ.get("MASTER_PORT", "12211")
+    if not dist.is_initialized():
         dist.init_process_group(backend="nccl")
 
 
-def _run_distributed(func, world_size, args: Dict, script=__file__):
-    if torch.cuda.device_count() < world_size:
-        pytest.skip("No enough GPU")
+def _run_distributed(func, world_size, args: Dict, script=__file__, env=dict()):
+    device_count = torch.cuda.device_count()
+    if device_count < world_size:
+        pytest.skip("No enough GPU, only {} found".format(device_count))
     import subprocess
     import os
 
     ps = []
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "36666"
-    os.environ["OMPI_COMM_WORLD_SIZE"] = str(world_size)
+    env["MASTER_ADDR"] = "localhost"
+    env["MASTER_PORT"] = str(random.randint(50000, 60000))
+    env["OMPI_COMM_WORLD_SIZE"] = str(world_size)
 
     for i in range(world_size):
-        os.environ["OMPI_COMM_WORLD_RANK"] = str(i)
+        env["OMPI_COMM_WORLD_RANK"] = str(i)
         p = subprocess.Popen(
-            [sys.executable, script, func, json.dumps(args)], stdout=subprocess.PIPE
+            [sys.executable, script, func, json.dumps(args)],
+            stdout=subprocess.PIPE,
+            env=env
         )
         ps.append(p)
 
