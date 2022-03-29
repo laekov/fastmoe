@@ -2,6 +2,7 @@ r"""
 FMoE core layer
 """
 import tree
+import os
 import torch
 import torch.nn as nn
 
@@ -46,7 +47,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
     def scatter_func(tensor):
         return MOEScatter.apply(
             tensor,
-            pos // topk,
+            torch.div(pos, topk, rounding_mode='floor'),
             local_expert_count,
             global_expert_count,
             fwd_batch_size,
@@ -73,6 +74,10 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
 
     outp = tree.map_structure(gather_func, x)
     return outp
+
+
+if os.environ.get('FMOE_FASTER_SCHEDULE_ENABLE', '0') in ['1', 'ON']:
+    from .fastermoe.schedule import _fmoe_general_global_forward
 
 
 class FMoE(nn.Module):
@@ -149,10 +154,12 @@ class FMoE(nn.Module):
         """
         if self.experts_fused:
             return self.experts(inp, fwd_expert_count)
+        if isinstance(fwd_expert_count, torch.Tensor):
+            fwd_expert_count = fwd_expert_count.cpu().numpy()
         outputs = []
         base_idx = 0
         for i in range(self.num_expert):
-            batch_size = fwd_expert_count[i].item()
+            batch_size = fwd_expert_count[i]
             inp_slice = inp[base_idx : base_idx + batch_size]
             outputs.append(self.experts[i](inp_slice))
             base_idx += batch_size
