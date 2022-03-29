@@ -17,7 +17,6 @@ torch::Tensor _smart_sch_forward(
         long global_batch_size,
         long n_workers,
         py::function forward_fn) {
-
     if (pipeline_gran == -1) {
         char* p = getenv("FMOE_FASTER_GROUP_SIZE");
         if (p) {
@@ -40,7 +39,7 @@ torch::Tensor _smart_sch_forward(
     auto output_buf = input_buf.new_zeros({input_buf.size(0), d_model});
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), 
-            "fmoe_cuda_fused_forward", ([&] {
+            "fmoe_cuda_smart_sch_forward", ([&] {
         fmoe_cuda_fused_forward_impl(
             forward_fn,
             input_buf.device(),
@@ -59,75 +58,42 @@ torch::Tensor _smart_sch_forward(
     return output_buf;
 }
 
-/*
-std::vector<torch::Tensor> _fused_backward(
-        torch::Tensor input_buf,
-        std::vector<std::vector<std::vector<torch::Tensor>>> params,
-        torch::Tensor middle_buf,
-        torch::Tensor output_buf,
+torch::Tensor _smart_sch_backward(
         torch::Tensor grad_out,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
-        torch::Tensor inp,
         torch::Tensor stored_models,
-        
-        long global_batch_size,
         long buf_batch_size,
-        long n_workers, bool has_bias) {
+        long global_batch_size,
+        long n_workers,
+        py::function backward_fn) {
     const auto num_expert = local_expert_count.size(0) / n_workers;
-    
-    auto smgr = getCudaStreamManager(input_buf.device().index());
+    auto smgr = getCudaStreamManager(grad_out.device().index());
     int rank;
     ncclCommUserRank(smgr->ncclcomm, &rank);
-    
-    const auto d_hidden = params[rank][0][0].size(1);
-    const auto d_model = params[rank][0][0].size(2);
+    const auto d_model = grad_out.size(1);
+    auto global_grad_out = grad_out.new_zeros({global_batch_size, d_model});
+    auto global_grad_in = grad_out.new_zeros({global_batch_size, d_model});
+    auto grad_in = grad_out.new_zeros({buf_batch_size, d_model});
 
-
-    auto global_grad_out = input_buf.new_zeros({global_batch_size, d_model});
-    auto grad_middle = input_buf.new_zeros({global_batch_size, d_hidden});
-    auto global_grad_in = input_buf.new_zeros({global_batch_size, d_model});
-    
-    auto grad_in = input_buf.new_zeros({buf_batch_size, d_model});
-    
-    for (auto node : params)
-        for (auto expert : node)
-            for (int i = 0; i < expert.size(); i++) {
-                // create the respective gradient of each tensor
-                CHECK_INPUT(expert[i]);
-                if (expert[i].grad().defined()) {
-                    CHECK_INPUT(expert[i].grad());
-                    continue;
-                }
-
-                expert[i].mutable_grad() = input_buf.new_zeros(expert[i].sizes());
-            }
-
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), 
-            "fmoe_cuda_fused_backward", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_out.scalar_type(), 
+            "fmoe_cuda_smartsch_backward", ([&] {
         fmoe_cuda_fused_backward_impl(
-            input_buf.data_ptr<scalar_t>(),
-            inp.data_ptr<scalar_t>(),
-            params,
+            backward_fn,
+            grad_out.device(),
 
-            middle_buf.data_ptr<scalar_t>(),
-            output_buf.data_ptr<scalar_t>(),
             grad_out.data_ptr<scalar_t>(),
-
             global_grad_out.data_ptr<scalar_t>(),
             global_grad_in.data_ptr<scalar_t>(),
-
-            grad_middle.data_ptr<scalar_t>(),
             grad_in.data_ptr<scalar_t>(),
 
             local_expert_count.data_ptr<long>(),
             global_expert_count.data_ptr<long>(),
             stored_models.data_ptr<bool>(),
-            d_model, d_hidden, num_expert, rank, n_workers, has_bias,
+            d_model, num_expert, rank, n_workers,
             pipeline_gran, smgr);
     }));
     return {grad_in,};
 }
-*/
 #endif
 

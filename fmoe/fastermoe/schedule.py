@@ -29,8 +29,9 @@ class MoEForward(Function):
         ctx.gobs = [None] * world_size
         def _expert_forward(x, y, idx):
             x = x.data
-            x.requires_grad = True
-            y0 = expert_fn(x, [x.shape[0]])
+            with torch.enable_grad():
+                x.requires_grad = True
+                y0 = expert_fn(x, [x.shape[0]])
             ctx.gibs[idx] = x
             ctx.gobs[idx] = y0
             y.copy_(y0)
@@ -55,21 +56,21 @@ class MoEForward(Function):
     @staticmethod
     def backward(ctx, grad_out):
         (pos_s, pos_g, local_expert_count, global_expert_count,
-                gib, gmb, gob, stored_models) = ctx.saved_tensors
+                stored_models) = ctx.saved_tensors
         (fwd_batch_size, inp_batch_size, world_size) = ctx.moe_args
 
-        def _expert_backward(grad, idx):
+        def _expert_backward(grad_y, grad_x, idx):
             y = ctx.gobs[idx]
-            torch.autograd.backward([y], [grad])
+            torch.autograd.backward([y], [grad_y])
             x = ctx.gibs[idx]
-            return x.grad
+            grad_x.copy_(x.grad)
 
         grad_out_buf = _local_scatter(grad_out.contiguous(), pos_g)
         grad_in_buf = fmoe_native.smart_sch_backward(
-                gib, gmb, gob, grad_out_buf,
+                grad_out_buf,
                 local_expert_count, global_expert_count,
                 stored_models,
-                fwd_batch_size, pos_s.shape[0],
+                pos_s.shape[0], fwd_batch_size,
                 world_size, _expert_backward)
         grad_in = _local_gather(grad_in_buf, pos_s, inp_batch_size)
 

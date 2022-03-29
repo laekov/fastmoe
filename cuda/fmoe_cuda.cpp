@@ -65,6 +65,15 @@ torch::Tensor _smart_sch_forward(
         torch::Tensor stored_models,
         long global_batch_size, long n_workers,
         py::function forward_fn);
+torch::Tensor _smart_sch_backward(
+        torch::Tensor grad_out,
+        torch::Tensor local_expert_count,
+        torch::Tensor global_expert_count,
+        torch::Tensor stored_models,
+        long buf_batch_size,
+        long global_batch_size,
+        long n_workers,
+        py::function backward_fn);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef FMOE_USE_NCCL
@@ -75,6 +84,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("swipe_once", &_swipe_once, "SWIPE balance strategy(CUDA)");
 
     m.def("smart_sch_forward", &_smart_sch_forward, "E2E MoE layer forward with smart scheduling");
+    m.def("smart_sch_backward", &_smart_sch_backward, "E2E MoE layer backward with smart scheduling");
 #endif
 
     m.def("expert_count", &_expert_count, "FastMoE count gate indices (CUDA)");

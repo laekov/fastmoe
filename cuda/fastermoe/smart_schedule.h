@@ -74,7 +74,7 @@ void _compute_ptrs(long num_expert, long rank, long world_size,
 }
 
 template<typename scalar_t>
-void _compute_forward(py::function fn, c10::Device device,
+void _compute_fn(py::function fn, c10::Device device,
         scalar_t* inp_buf, scalar_t* out_buf,
         int ei, long step, long offset, long micro_batch_size, long d_model) {
     auto options = torch::TensorOptions()
@@ -86,14 +86,6 @@ void _compute_forward(py::function fn, c10::Device device,
     auto oup = torch::from_blob(out_buf + offset * d_model,
             {micro_batch_size, d_model}, options);
     fn(inp, oup, step);
-}
-
-
-template<typename scalar_t>
-void _compute_backward(py::function fn, 
-        scalar_t* inp_buf, scalar_t* out_buf,
-        long* local_expert_count, long* global_expert_count,
-        int ei, long offset, long micro_batch_size, long d_model) {
 }
 
 
@@ -162,7 +154,7 @@ void fmoe_cuda_fused_forward_impl(
             long micro_batch_size = global_ptr[ei * world_size + 
                 (from_base + pipeline_gran)] - offset;
             
-            _compute_forward(forward_fn, device,
+            _compute_fn(forward_fn, device,
                     global_input_buf, global_output_buf,
                     ei, step, offset, micro_batch_size, d_model);
         }
@@ -230,19 +222,17 @@ void fmoe_cuda_fused_forward_impl(
 template<typename scalar_t>
 void fmoe_cuda_fused_backward_impl(
         py::function backward_fn,
-        const scalar_t* input_buf,
-        const scalar_t* output_buf,
-        const scalar_t* grad_out,
+        c10::Device device,
 
+        scalar_t* grad_out,
         scalar_t* global_grad_out,
         scalar_t* global_grad_in,
-
         scalar_t* grad_in,
 
         const long* local_expert_count, 
         const long* global_expert_count, 
         const bool* stored_models,
-        long d_model, long d_hidden, 
+        long d_model,
         long num_expert, long rank, long world_size,
         long pipeline_gran, CudaStreamManager* smgr) {
 
@@ -294,11 +284,9 @@ void fmoe_cuda_fused_backward_impl(
             long micro_batch_size = global_ptr[ei * world_size + 
                 (from_base + pipeline_gran)] - offset;
 
-            _compute_backward(backward_fn,
-                    input_buf, output_buf, global_grad_out,
-                    global_grad_in,
-                    ei,
-                    offset, micro_batch_size);
+            _compute_fn(backward_fn, device,
+                    global_grad_out, global_grad_in,
+                    ei, step, offset, micro_batch_size, d_model);
         }
         // TODO: get pytorch's compute stream
     }
