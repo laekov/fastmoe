@@ -112,4 +112,4 @@ introduced to replace PyTorch's DDP module.
 
 ## Troubleshootings / Discussion
 
-If you have any problem using FastMoE, or you are interested in getting involved in developing FastMoE, feel free to join the [our slack channel](https://join.slack.com/t/fastmoe/shared_invite/zt-mz0ai6ol-ggov75D62YsgHfzShw8KYw).
+If you have any problem using FastMoE, or you are interested in getting involved in developing FastMoE, feel free to join [our slack channel](https://join.slack.com/t/fastmoe/shared_invite/zt-mz0ai6ol-ggov75D62YsgHfzShw8KYw).
