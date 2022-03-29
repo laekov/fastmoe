@@ -9,7 +9,7 @@
 
 long pipeline_gran = -1;
 
-torch::Tensor _smart_sch_forward(
+std::vector<torch::Tensor> _smart_sch_forward(
         torch::Tensor input_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
@@ -33,6 +33,7 @@ torch::Tensor _smart_sch_forward(
     const auto num_expert = local_expert_count.size(0) / n_workers;
     const auto d_model = input_buf.size(1);
 
+    // TODO: maybe empty is faster
     auto global_input_buf = input_buf.new_zeros({global_batch_size, d_model});
     auto global_output_buf = input_buf.new_zeros({global_batch_size, d_model});
     
@@ -55,7 +56,7 @@ torch::Tensor _smart_sch_forward(
             d_model, num_expert, rank, n_workers,
             pipeline_gran, smgr);
     }));
-    return output_buf;
+    return {output_buf, global_input_buf};
 }
 
 torch::Tensor _smart_sch_backward(

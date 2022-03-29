@@ -58,7 +58,7 @@ std::vector<torch::Tensor> _swipe_once(
         long n_expert, long n_worker, long bias);
 
 // smart scheduling
-torch::Tensor _smart_sch_forward(
+std::vector<torch::Tensor> _smart_sch_forward(
         torch::Tensor input_buf,
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,

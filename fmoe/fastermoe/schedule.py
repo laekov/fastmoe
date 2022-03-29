@@ -36,7 +36,7 @@ class MoEForward(Function):
             ctx.gobs[idx] = y0
             y.copy_(y0)
 
-        local_output_buf = fmoe_native.smart_sch_forward(
+        local_output_buf, gib = fmoe_native.smart_sch_forward(
                 local_input_buf,
                 local_expert_count, global_expert_count, 
                 stored_models, fwd_batch_size,
@@ -46,7 +46,7 @@ class MoEForward(Function):
                 maybe_overlap=False)
         
         variables = (pos_s, pos_g, local_expert_count, global_expert_count,
-                stored_models)
+                stored_models, gib)
         
         ctx.moe_args = fwd_batch_size, inp.shape[0], world_size
         ctx.save_for_backward(*variables)
@@ -56,7 +56,7 @@ class MoEForward(Function):
     @staticmethod
     def backward(ctx, grad_out):
         (pos_s, pos_g, local_expert_count, global_expert_count,
-                stored_models) = ctx.saved_tensors
+                stored_models, _) = ctx.saved_tensors
         (fwd_batch_size, inp_batch_size, world_size) = ctx.moe_args
 
         def _expert_backward(grad_y, grad_x, idx):
