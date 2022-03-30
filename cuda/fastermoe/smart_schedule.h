@@ -168,7 +168,7 @@ void fmoe_cuda_fused_forward_impl(
                 cudaEventRecord(evt_get, torch_stream);
                 cudaStreamWaitEvent(smgr->stream(1), evt_get);
             }
-            NCCL_SAFE_CALL(ncclBcast(params[si].data_ptr<void>(), 
+            NCCL_SAFE_CALL(ncclBcast((void*)params[si].data_ptr<scalar_t>(), 
                         expert_size * sizeof(scalar_t), ncclChar,
                         i / num_expert, smgr->ncclcomm, smgr->stream(0)));
             cudaEventCreate(evt_shadow + si);

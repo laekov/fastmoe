@@ -6,11 +6,12 @@ def get_expert_param_size(e):
     
 
 def get_expert_params(e, out):
+    print('gep to {}'.format(out))
     offset = 0
     for n, p in e.named_parameters():
         seg = out[offset:offset + p.numel()]
         offset += p.numel()
-        seg.copy_(p)
+        seg.copy_(p.data.flatten())
 
 
 def stash_expert_params(e, params):
@@ -27,6 +28,8 @@ def stash_expert_params(e, params):
 
 
 def pop_expert_params(e):
+    if not hasattr(e, 'expert_param_stash'):
+        return
     for n, p in e.named_parameters():
         with torch.no_grad():
             p.copy_(e.expert_param_stash[n])

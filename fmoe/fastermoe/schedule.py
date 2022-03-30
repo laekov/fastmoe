@@ -7,7 +7,7 @@ from torch.autograd.function import Function
 from fmoe.functions import prepare_forward, ensure_comm
 from fmoe.functions import _local_scatter, _local_gather 
 import fmoe_cuda as fmoe_native
-import expert_utils
+from fmoe.fastermoe import expert_utils
 
 
 class MoEForward(Function):
@@ -47,7 +47,7 @@ class MoEForward(Function):
         pop_fn = lambda: expert_utils.pop_expert_params(experts)
         ctx.shadows = [None] * world_size
         def stash_fn(params, idx):
-            expert_utils.stash_expert_params(experts, p)
+            expert_utils.stash_expert_params(experts, params)
             ctx.shadows[idx] = params
 
         local_output_buf, gib = fmoe_native.smart_sch_forward(
@@ -99,7 +99,7 @@ class MoEForward(Function):
         return (None, None, grad_in, None, None, None, None, None, None, None, None)
 
 
-def _fmoe_general_global_forward(inp, gate, expert_fn, n_expert, world_size, experts=None):
+def _fmoe_general_global_forward(inp, gate, expert_fn, n_expert, world_size, experts=None, stored_models=None):
     # TODO: Using multiple tensors as input is to be supported.
     assert(isinstance(inp, torch.Tensor))
     # TODO: Support many experts on each process
@@ -113,7 +113,8 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, n_expert, world_size, exp
     ) = prepare_forward(gate, n_expert, world_size)
 
     # TODO: Expert shadowing is to be supported. Currently using all 0s
-    stored_models = torch.zeros(n_expert * world_size, dtype=torch.bool)
+    if stored_models is None:
+        stored_models = torch.zeros(n_expert * world_size, dtype=torch.bool)
 
     topk = 1
     if len(gate.shape) == 2:

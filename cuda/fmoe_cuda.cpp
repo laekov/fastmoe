@@ -80,6 +80,8 @@ torch::Tensor _smart_sch_backward(
         long expert_size,
         long n_workers,
         py::function backward_fn,
+        py::function stash_fn,
+        py::function pop_fn,
         py::function collect_fn,
         py::function set_grad_fn);
 
