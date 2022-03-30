@@ -25,8 +25,12 @@ std::vector<torch::Tensor> _smart_sch_forward(
         torch::Tensor global_expert_count,
         torch::Tensor stored_models,
         long global_batch_size,
+        long expert_size,
         long n_workers,
-        py::function forward_fn) {
+        py::function forward_fn,
+        py::function get_param_fn,
+        py::function stash_fn,
+        py::function pop_fn) {
     if (pipeline_gran == -1) {
         char* p = getenv("FMOE_FASTER_GROUP_SIZE");
         if (p) {
@@ -50,11 +54,26 @@ std::vector<torch::Tensor> _smart_sch_forward(
     
     auto output_buf = input_buf.new_zeros({input_buf.size(0), d_model});
 
+    std::vector<torch::Tensor> params;
+    auto stored_models_ = stored_models.data_ptr<bool>();
+    for (long i = 0; i < num_expert * n_workers; ++i) {
+        if (stored_models_[i]) {
+            torch::Tensor t = input_buf.new_empty({expert_size});
+            if (i / num_expert == rank) {
+                get_param_fn(t);
+            }
+            params.push_back(t);
+        }
+    }
+
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), 
             "fmoe_cuda_smart_sch_forward", ([&] {
         fmoe_cuda_fused_forward_impl(
             forward_fn,
+            stash_fn,
+            pop_fn,
             input_buf.device(),
+            params,
 
             input_buf.data_ptr<scalar_t>(),
             global_input_buf.data_ptr<scalar_t>(),
@@ -64,7 +83,7 @@ std::vector<torch::Tensor> _smart_sch_forward(
             local_expert_count.data_ptr<long>(),
             global_expert_count.data_ptr<long>(),
             stored_models.data_ptr<bool>(),
-            d_model, num_expert, rank, n_workers,
+            d_model, num_expert, rank, n_workers, expert_size,
             pipeline_gran, smgr);
     }));
     return {output_buf, global_input_buf};
@@ -77,8 +96,13 @@ torch::Tensor _smart_sch_backward(
         torch::Tensor stored_models,
         long buf_batch_size,
         long global_batch_size,
+        long expert_size,
         long n_workers,
-        py::function backward_fn) {
+        py::function backward_fn,
+        py::function stash_fn,
+        py::function pop_fn,
+        py::function collect_fn,
+        py::function set_grad_fn) {
     const auto num_expert = local_expert_count.size(0) / n_workers;
     auto smgr = getCudaStreamManager(grad_out.device().index());
     int rank;

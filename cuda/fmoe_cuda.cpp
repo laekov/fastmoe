@@ -63,8 +63,13 @@ std::vector<torch::Tensor> _smart_sch_forward(
         torch::Tensor local_expert_count,
         torch::Tensor global_expert_count,
         torch::Tensor stored_models,
-        long global_batch_size, long n_workers,
-        py::function forward_fn);
+        long global_batch_size,
+        long expert_size,
+        long n_workers,
+        py::function forward_fn,
+        py::function get_param_fn,
+        py::function stash_fn,
+        py::function pop_fn);
 torch::Tensor _smart_sch_backward(
         torch::Tensor grad_out,
         torch::Tensor local_expert_count,
@@ -72,8 +77,11 @@ torch::Tensor _smart_sch_backward(
         torch::Tensor stored_models,
         long buf_batch_size,
         long global_batch_size,
+        long expert_size,
         long n_workers,
-        py::function backward_fn);
+        py::function backward_fn,
+        py::function collect_fn,
+        py::function set_grad_fn);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef FMOE_USE_NCCL
