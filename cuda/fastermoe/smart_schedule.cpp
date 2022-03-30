@@ -6,8 +6,18 @@
 #include <c10/cuda/CUDAGuard.h>
 
 #include "smart_schedule.h"
+#include "status.h"
 
 long pipeline_gran = -1;
+
+int smart_sch_enabled = 0;
+
+int isSmartSchEnabled() {
+    return smart_sch_enabled;
+}
+void setSmartSchEnabled(int s) {
+    smart_sch_enabled = s;
+}
 
 std::vector<torch::Tensor> _smart_sch_forward(
         torch::Tensor input_buf,
@@ -24,6 +34,7 @@ std::vector<torch::Tensor> _smart_sch_forward(
         } else {
             pipeline_gran = 4;
         }
+        setSmartSchEnabled(1);
     }
 
     auto smgr = getCudaStreamManager(input_buf.device().index());
