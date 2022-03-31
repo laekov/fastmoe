@@ -13,7 +13,7 @@
 
 
 template<typename scalar_t>
-void _exchange_with(
+void exchangeWith(
         const scalar_t* sendbuf, size_t sendcount, int t_send,
         scalar_t* recvbuf, size_t recvcount, int t_recv,
         long d_model,
@@ -40,15 +40,15 @@ void _exchange_with(
     int idx_self = ei +      rank * num_expert;
 
 
-void _compute_ptrs(long num_expert, long rank, long world_size, 
-        const long* local_expert_count, 
-        const long* global_expert_count, 
+void computePtrs(long num_expert, long rank, long world_size,
+        const long* local_expert_count,
+        const long* global_expert_count,
         const bool* stored_models,
         int *local_ptr,
         int *global_ptr,
         int *local_global_ptr) {
     local_ptr[0] = global_ptr[0] = local_global_ptr[0] = 0;
-    
+
     for (int i = 0; i < num_expert * world_size; ++i) {
         local_ptr[i + 1] = local_ptr[i] + local_expert_count[i];
 
@@ -76,7 +76,7 @@ void _compute_ptrs(long num_expert, long rank, long world_size,
 
 
 template<typename scalar_t>
-void _compute_fn(py::function fn, c10::Device device,
+void computeFn(py::function fn, c10::Device device,
         scalar_t* inp_buf, scalar_t* out_buf,
         long idx, long offset, long micro_batch_size, long d_model,
         CudaStreamManager* smgr) {
@@ -107,8 +107,8 @@ void fmoe_cuda_fused_forward_impl(
         scalar_t* global_output_buf,
         scalar_t* output_buf,
 
-        const long* local_expert_count, 
-        const long* global_expert_count, 
+        const long* local_expert_count,
+        const long* global_expert_count,
         const bool* stored_models,
 
         long d_model,
@@ -119,7 +119,7 @@ void fmoe_cuda_fused_forward_impl(
     int *local_ptr = new int[num_expert * world_size + 1];
     int *global_ptr = new int[num_expert * world_size + 1];
     int *local_global_ptr = new int[num_expert * world_size + 1]; // local fetched models tracker
-    _compute_ptrs(num_expert, rank, world_size,
+    computePtrs(num_expert, rank, world_size,
             local_expert_count, global_expert_count, stored_models,
             local_ptr, global_ptr, local_global_ptr);
 
@@ -145,7 +145,7 @@ void fmoe_cuda_fused_forward_impl(
                 int rank_send = j + to_base;
                 int rank_recv = j + from_base;
                 GEN_IDX;
-                _exchange_with(input_buf + local_ptr[idx_send] * d_model,
+                exchangeWith(input_buf + local_ptr[idx_send] * d_model,
                         local_expert_count[idx_send] * !stored_models[idx_send], rank_send,
                         global_input_buf + global_ptr[gidx_recv] * d_model,
                         global_expert_count[idx_recv] * !stored_models[idx_self], rank_recv,
@@ -167,8 +167,9 @@ void fmoe_cuda_fused_forward_impl(
                 cudaEventCreate(&evt_get);
                 cudaEventRecord(evt_get, torch_stream);
                 cudaStreamWaitEvent(smgr->stream(1), evt_get);
+                cudaEventDestroy(evt_get);
             }
-            NCCL_SAFE_CALL(ncclBcast((void*)params[si].data_ptr<scalar_t>(), 
+            NCCL_SAFE_CALL(ncclBcast((void*)params[si].data_ptr<scalar_t>(),
                         expert_size * sizeof(scalar_t), ncclChar,
                         i / num_expert, smgr->ncclcomm, smgr->stream(0)));
             cudaEventCreate(evt_shadow + si);
@@ -183,10 +184,9 @@ void fmoe_cuda_fused_forward_impl(
         for (int ei = 0; ei < num_expert; ++ei) {
             GEN_BASE(step);
             long offset = global_ptr[ei * world_size + from_base];
-            long micro_batch_size = global_ptr[ei * world_size + 
+            long micro_batch_size = global_ptr[ei * world_size +
                 (from_base + pipeline_gran)] - offset;
-            
-            _compute_fn(forward_fn, device,
+            computeFn(forward_fn, device,
                     global_input_buf, global_output_buf,
                     step, offset, micro_batch_size, d_model, smgr);
         }
@@ -200,7 +200,7 @@ void fmoe_cuda_fused_forward_impl(
             cudaStreamWaitEvent(torch_stream, evt_shadow[si], 0);
             long offset = local_ptr[i];
             long micro_batch_size = local_expert_count[i];
-            _compute_fn(forward_fn, device,
+            computeFn(forward_fn, device,
                     input_buf, output_buf,
                     n_groups + si, offset, micro_batch_size, d_model, smgr);
             ++si;
@@ -218,7 +218,7 @@ void fmoe_cuda_fused_forward_impl(
                 int rank_send = j + from_base;
                 int rank_recv = j + to_base;
                 GEN_IDX;
-                _exchange_with(global_output_buf + global_ptr[gidx_send] * d_model,
+                exchangeWith(global_output_buf + global_ptr[gidx_send] * d_model,
                         global_expert_count[idx_send] * !stored_models[idx_self], rank_send,
                         output_buf + local_ptr[idx_recv] * d_model,
                         local_expert_count[idx_recv] * !stored_models[idx_recv], rank_recv,
@@ -241,15 +241,16 @@ void fmoe_cuda_fused_forward_impl(
     }
     delete [] input_ready;
     delete [] output_ready;
-    if (params.size()) {
-        delete [] evt_shadow;
-    }
 }
 
 
 template<typename scalar_t>
 void fmoe_cuda_fused_backward_impl(
         py::function backward_fn,
+        py::function stash_fn,
+        py::function pop_fn,
+        py::function collect_fn,
+        py::function set_grad_fn,
         c10::Device device,
 
         scalar_t* grad_out,
@@ -257,8 +258,8 @@ void fmoe_cuda_fused_backward_impl(
         scalar_t* global_grad_in,
         scalar_t* grad_in,
 
-        const long* local_expert_count, 
-        const long* global_expert_count, 
+        const long* local_expert_count,
+        const long* global_expert_count,
         const bool* stored_models,
         long d_model,
         long num_expert, long rank, long world_size,
@@ -269,10 +270,9 @@ void fmoe_cuda_fused_backward_impl(
     int *global_ptr = new int[num_expert * world_size + 1];
     int *local_global_ptr = new int[num_expert * world_size + 1]; // local fetched models tracker
 
-    _compute_ptrs(num_expert, rank, world_size,
+    computePtrs(num_expert, rank, world_size,
             local_expert_count, global_expert_count, stored_models,
             local_ptr, global_ptr, local_global_ptr);
-   
     if (pipeline_gran > world_size) {
         pipeline_gran = world_size;
     }
@@ -286,6 +286,7 @@ void fmoe_cuda_fused_backward_impl(
         cudaEventCreate(output_ready + i);
     }
 
+    // S_0 ... S_n
     for (long step = 0; step < n_groups; ++step) {
         for (int ei = 0; ei < num_expert; ++ei) {
             GEN_BASE(step);
@@ -294,7 +295,7 @@ void fmoe_cuda_fused_backward_impl(
                 int rank_send = j + to_base;
                 int rank_recv = j + from_base;
                 GEN_IDX;
-                _exchange_with(grad_out + local_ptr[idx_send] * d_model,
+                exchangeWith(grad_out + local_ptr[idx_send] * d_model,
                         local_expert_count[idx_send] * !stored_models[idx_send], rank_send,
                         global_grad_out + global_ptr[gidx_recv] * d_model,
                         global_expert_count[idx_recv] * !stored_models[idx_self], rank_recv,
@@ -305,21 +306,54 @@ void fmoe_cuda_fused_backward_impl(
         cudaEventRecord(input_ready[step], smgr->stream(0));
     }
 
+    // Shadowed experts backward and reduce
+    cudaEvent_t *evt_reduce = new cudaEvent_t[num_expert];
+    for (long i = 0, si = 0; i < world_size * num_expert; ++i) {
+        if (stored_models[i]) {
+            stash_fn(si);
+            long offset = local_ptr[i];
+            long micro_batch_size = local_expert_count[i];
+            computeFn(backward_fn, device,
+                    grad_out, grad_in,
+                    n_groups + si, offset, micro_batch_size, d_model, smgr);
+            collect_fn(si, i / num_expert);
+            if (i / num_expert == rank) {
+                cudaEventCreate(evt_reduce + i % num_expert);
+                cudaEventRecord(evt_reduce[i % num_expert], smgr->stream(0));
+            }
+            ++si;
+        }
+    }
+    pop_fn();
+
+    // C_0 ... C_n
     for (long step = 0; step < n_groups; ++step) {
         cudaStreamWaitEvent(smgr->stream(1), input_ready[step], 0);
         for (int ei = 0; ei < num_expert; ++ei) {
             GEN_BASE(step);
             long offset = global_ptr[ei * world_size + from_base];
-            long micro_batch_size = global_ptr[ei * world_size + 
+            long micro_batch_size = global_ptr[ei * world_size +
                 (from_base + pipeline_gran)] - offset;
 
-            _compute_fn(backward_fn, device,
+            computeFn(backward_fn, device,
                     global_grad_out, global_grad_in,
                     step, offset, micro_batch_size, d_model, smgr);
         }
         cudaEventRecord(output_ready[step], torch_stream);
     }
 
+    // Collect gradients for shadowed experts
+    for (long i = 0, si = 0; i < world_size * num_expert; ++i) {
+        if (stored_models[i]) {
+            if (i / num_expert == rank) {
+                cudaStreamWaitEvent(torch_stream, evt_reduce[i % num_expert], 0);
+                set_grad_fn(si);
+            }
+            ++si;
+        }
+    }
+
+    // R_0 ... R_n
     for (long step = 0; step < n_groups; ++step) {
         cudaStreamWaitEvent(smgr->stream(0), output_ready[step], 0);
         for (int ei = 0; ei < num_expert; ++ei) {
@@ -329,7 +363,7 @@ void fmoe_cuda_fused_backward_impl(
                 int rank_send = j + from_base;
                 int rank_recv = j + to_base;
                 GEN_IDX;
-                _exchange_with(global_grad_in + global_ptr[gidx_send] * d_model,
+                exchangeWith(global_grad_in + global_ptr[gidx_send] * d_model,
                         global_expert_count[idx_send] * !stored_models[idx_self], rank_send,
                         grad_in + local_ptr[idx_recv] * d_model,
                         local_expert_count[idx_recv] * !stored_models[idx_recv], rank_recv,
@@ -341,36 +375,6 @@ void fmoe_cuda_fused_backward_impl(
 
     checkCudaErrors(cudaGetLastError());
 
-    /* TODO: Shadowing support
-    int offset = global_ptr[world_size * num_expert];
-    for (int j = 0; j < world_size; j++) {
-        
-        for (int i = 0; i < num_expert; i++) {
-            int idx = j * num_expert + i;
-            if (!stored_models[idx])
-                continue;
-            
-            weight1 = params[j][0][0].data_ptr<scalar_t>();
-            weight2 = params[j][0][last].data_ptr<scalar_t>();    
-            grad_weight1 = params[j][0][0].mutable_grad().data_ptr<scalar_t>();
-            grad_weight2 = params[j][0][last].mutable_grad().data_ptr<scalar_t>();
-            
-            auto stream = 2 + (idx % (SMGR_N_STREAMS- 2));
-
-            _compute_mlp_backward(
-                original_input_buf + local_ptr[idx] * d_model, weight1, weight2,
-                middle_buf + (offset + local_global_ptr[idx]) * d_hidden, output_buf, grad_out + local_ptr[idx] * d_model,
-                grad_middle + (offset + local_global_ptr[idx]) * d_hidden, grad_weight1, grad_weight2, grad_in + local_ptr[idx] * d_model,
-                i,
-                0, local_expert_count[idx],
-                d_model, d_hidden, 0, // we never consider it to be the first since it's already initialized to zero and we are lazy
-                smgr->stream(stream), smgr->handle(stream));
-
-        }
-    }
-    */
-
-
     delete [] local_ptr;
     delete [] global_ptr;
     delete [] local_global_ptr;
@@ -381,6 +385,12 @@ void fmoe_cuda_fused_backward_impl(
     }
     delete [] input_ready;
     delete [] output_ready;
+    for (long i = 0; i < num_expert; ++i) {
+        if (stored_models[i + rank * num_expert]) {
+            cudaEventDestroy(evt_reduce[i]);
+        }
+    }
+    delete [] evt_reduce;
 }
 
 #endif  // SMART_SCHEDULE_H

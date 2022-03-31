@@ -62,16 +62,18 @@ def _test_faster_shadow(d_model, batch_size, n_expert):
     dist.broadcast(stored_models, 0)
     stored_models = stored_models.cpu()
 
+    # if rank == 0:
+         # print('stored models {}'.format(stored_models))
+
     ensure_comm(x1, None)
     y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=m1, stored_models=stored_models)
-    # y1.sum().backward()
+    y1.sum().backward()
 
     y2 = naive_fwd(x2, topk_idx, ef2, n_expert, world_size, experts=m2)
-    # y2.sum().backward()
-    _assert_numerical(['out'], [y1], [y2], rank)
-    # _assert_numerical(['out', 'grad_in', 'grad_bias', 'grad_weight'],
-    #         [y1, x1.grad, m1.bias.grad, m1.weight.grad],
-    #         [y2, x2.grad, m2.bias.grad, m2.weight.grad], rank)
+    y2.sum().backward()
+    _assert_numerical(['out', 'grad_in', 'grad_bias', 'grad_weight'],
+            [y1, x1.grad, m1.bias.grad, m1.weight.grad],
+            [y2, x2.grad, m2.bias.grad, m2.weight.grad], rank)
 
 
 if __name__ == '__main__':

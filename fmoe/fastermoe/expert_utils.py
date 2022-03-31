@@ -6,7 +6,6 @@ def get_expert_param_size(e):
     
 
 def get_expert_params(e, out):
-    print('gep to {}'.format(out))
     offset = 0
     for n, p in e.named_parameters():
         seg = out[offset:offset + p.numel()]
@@ -42,7 +41,7 @@ def collect_expert_grads(e, grads):
         seg = grads[offset:offset + p.numel()]
         offset += p.numel()
         if p.grad is not None:
-            seg.copy_(p.grad)
+            seg.copy_(p.grad.flatten())
             p.grad = None
         else:
             seg.zero_()
@@ -56,4 +55,4 @@ def set_grads(e, grads):
         if p.grad is None:
             p.grad = seg.clone()
         else:
-            p.grad += seg
+            p.grad += seg.reshape(p.shape)

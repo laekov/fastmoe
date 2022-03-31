@@ -77,13 +77,16 @@ torch::Tensor _smart_sch_backward(
         torch::Tensor stored_models,
         long buf_batch_size,
         long global_batch_size,
-        long expert_size,
         long n_workers,
         py::function backward_fn,
         py::function stash_fn,
         py::function pop_fn,
         py::function collect_fn,
         py::function set_grad_fn);
+void _reduce_grad(
+        torch::Tensor t,
+        long root,
+        long expert_size);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef FMOE_USE_NCCL
@@ -95,6 +98,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
     m.def("smart_sch_forward", &_smart_sch_forward, "E2E MoE layer forward with smart scheduling");
     m.def("smart_sch_backward", &_smart_sch_backward, "E2E MoE layer backward with smart scheduling");
+    m.def("reduce_grad", &_reduce_grad, "Reduce gradients over FastMoE's communication stream");
 #endif
 
     m.def("expert_count", &_expert_count, "FastMoE count gate indices (CUDA)");
