@@ -43,7 +43,7 @@ if __name__ == '__main__':
         author_email='hja20@mails.tsinghua.edu.cn',
         license='Apache-2',
         url='https://github.com/laekov/fastmoe',
-        packages=['fmoe', 'fmoe.megatron', 'fmoe.gates'],
+        packages=['fmoe', 'fmoe.megatron', 'fmoe.gates', 'fmoe.fastermoe'],
         ext_modules=[
             CUDAExtension(
                 name='fmoe_cuda', 
@@ -54,6 +54,7 @@ if __name__ == '__main__':
                     'cuda/global_exchange.cpp',
                     'cuda/parallel_linear.cu',
                     'cuda/fmoe_cuda.cpp',
+                    'cuda/fastermoe/smart_schedule.cpp',
                     ],
                 define_macros=define_macros,
                 extra_compile_args={

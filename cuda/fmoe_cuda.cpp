@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <torch/csrc/autograd/custom_function.h>
 #include <torch/extension.h>
 
 // global_exchange
@@ -56,6 +57,24 @@ std::vector<torch::Tensor> _swipe_once(
         torch::Tensor gate_idx, torch::Tensor capacity_tensor,
         long n_expert, long n_worker, long bias);
 
+// smart scheduling
+std::vector<torch::Tensor> _smart_sch_forward(
+        torch::Tensor input_buf,
+        torch::Tensor local_expert_count,
+        torch::Tensor global_expert_count,
+        torch::Tensor stored_models,
+        long global_batch_size, long n_workers,
+        py::function forward_fn);
+torch::Tensor _smart_sch_backward(
+        torch::Tensor grad_out,
+        torch::Tensor local_expert_count,
+        torch::Tensor global_expert_count,
+        torch::Tensor stored_models,
+        long buf_batch_size,
+        long global_batch_size,
+        long n_workers,
+        py::function backward_fn);
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef FMOE_USE_NCCL
     m.def("expert_exchange", &_expert_exchange, "FastMoE expert exchange (CUDA)");
@@ -63,6 +82,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("global_gather", &_global_gather, "FastMoE global gather (CUDA)");
     m.def("ensure_nccl", &_ensure_nccl, "FastMoE ensure torch nccl comm");
     m.def("swipe_once", &_swipe_once, "SWIPE balance strategy(CUDA)");
+
+    m.def("smart_sch_forward", &_smart_sch_forward, "E2E MoE layer forward with smart scheduling");
+    m.def("smart_sch_backward", &_smart_sch_backward, "E2E MoE layer backward with smart scheduling");
 #endif
 
     m.def("expert_count", &_expert_count, "FastMoE count gate indices (CUDA)");
