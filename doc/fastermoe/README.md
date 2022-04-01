@@ -1,7 +1,7 @@
 Boost the Performance by FasterMoE 
 ===
 
-一个中文版见[这篇博客](https://laekov.com.cn/view/181401)
+一个中文版见[这篇博客](https://laekov.com.cn/view/181401#howto)
 
 There are three main optimizations in the PPoPP'22 paper _FasterMoE: Modeling
 and Optimizing Training of Large-scale Dynamic Pre-trained Models_. Thanks to
