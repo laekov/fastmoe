@@ -95,6 +95,15 @@ FastMoE 的模型并行模式需要专门的并行策略, 而 PyTorch 和 Megatr
 都不支持这样的策略. 因此, 需要使用 `fmoe.DistributedGroupedDataParallel`
 模块来代替 PyTorch 的 DDP 模块.
 
+### 如何训练得更快
+
+在 PPoPP'22 会议上有一篇论文: _FasterMoE: modeling and optimizing training of
+large-scale dynamic pre-trained models_. 我们将文中的技术集成到了 FastMoE 系统中,
+从而提升其模型并行的效率.
+
+这些新特性被命名为 **Faster Performance Features**, 并通过一些环境变量来控制是否
+启用它们. 详见[这篇单独的文档](doc/fastermoe).
+
 ## 答疑 / 讨论
 
 如果您在使用 FastMoE 的过程中有任何疑问, 或您有兴趣参与 FastMoE 的相关工作,
