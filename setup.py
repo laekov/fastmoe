@@ -13,6 +13,7 @@ authors = [
         'Tiago Antunes', 
         'Jinjun Peng', 
         'Qin Li',
+        'Mingshu Zhai'
 ]
 
 is_rocm_pytorch = False
@@ -37,7 +38,7 @@ else:
 if __name__ == '__main__':
     setuptools.setup(
         name='fastmoe',
-        version='0.3.0',
+        version='1.0.0',
         description='An efficient Mixture-of-Experts system for PyTorch',
         author=', '.join(authors),
         author_email='hja20@mails.tsinghua.edu.cn',
