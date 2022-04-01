@@ -3,6 +3,7 @@ import random
 import os
 import sys
 from typing import Dict
+import random
 
 import pytest
 import torch
@@ -19,7 +20,6 @@ def _ensure_initialized():
         os.environ["WORLD_SIZE"] = os.environ.get("OMPI_COMM_WORLD_SIZE", "1")
         os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["RANK"]
         os.environ["MASTER_ADDR"] = os.environ.get("MASTER_ADDR", "localhost")
-        os.environ["MASTER_PORT"] = os.environ.get("MASTER_PORT", "12211")
     if not dist.is_initialized():
         dist.init_process_group(backend="nccl")
 

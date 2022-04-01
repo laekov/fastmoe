@@ -9,6 +9,8 @@ from fmoe.functions import _local_scatter, _local_gather
 import fmoe_cuda as fmoe_native
 from fmoe.fastermoe import expert_utils
 
+from .shadow_policy import get_shadow_policy
+
 
 class MoEForward(Function):
     @staticmethod
@@ -31,6 +33,7 @@ class MoEForward(Function):
             x = x.data
             with torch.enable_grad():
                 x.requires_grad = True
+                # To skip torch autograd's version check.
                 with torch.autograd.graph.saved_tensors_hooks(nothing, nothing):
                     y0 = expert_fn(x, [x.shape[0]])
             ctx.gibs[idx] = x
@@ -101,6 +104,9 @@ class MoEForward(Function):
         return (None, None, grad_in, None, None, None, None, None, None, None, None)
 
 
+policy_fn = None
+
+
 def _fmoe_general_global_forward(inp, gate, expert_fn, n_expert, world_size, experts=None, stored_models=None):
     # TODO: Using multiple tensors as input is to be supported.
     assert(isinstance(inp, torch.Tensor))
@@ -114,9 +120,13 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, n_expert, world_size, exp
         fwd_batch_size,
     ) = prepare_forward(gate, n_expert, world_size)
 
-    # TODO: Expert shadowing is to be supported. Currently using all 0s
+    global policy_fn
+    if policy_fn is None:
+        policy_fn = get_shadow_policy(d_model=inp.shape[-1])
+
     if stored_models is None:
-        stored_models = torch.zeros(n_expert * world_size, dtype=torch.bool)
+        stored_models = policy_fn(local_expert_count, global_expert_count,
+                n_expert, world_size)
 
     topk = 1
     if len(gate.shape) == 2:

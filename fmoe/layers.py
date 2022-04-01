@@ -11,6 +11,8 @@ from .functions import MOEScatter, MOEGather
 from .functions import AllGather, Slice
 from .gates import NaiveGate
 
+from .fastermoe.config import switch_from_env
+
 
 def mark_module_parallel_comm(module, comm):
     r"""
@@ -76,7 +78,9 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, *
     return outp
 
 
-if os.environ.get('FMOE_FASTER_SCHEDULE_ENABLE', '0') in ['1', 'ON']:
+fmoe_faster_schedule = False
+if switch_from_env('FMOE_FASTER_SCHEDULE_ENABLE', False):
+    fmoe_faster_schedule = True
     from .fastermoe.schedule import _fmoe_general_global_forward
 
 

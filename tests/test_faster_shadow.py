@@ -17,25 +17,28 @@ from fmoe.layers import _fmoe_general_global_forward as naive_fwd
 
 @pytest.mark.parametrize("n_process", [8])
 @pytest.mark.parametrize("d_model", [1024])
-@pytest.mark.parametrize("batch_size", [16])
+@pytest.mark.parametrize("batch_size", [16, 512])
 @pytest.mark.parametrize("n_expert", [1])
 @pytest.mark.parametrize("group_sz", [1, 2, 4])
-def test_faster_shadow(n_process, d_model, batch_size, n_expert, group_sz):
+@pytest.mark.parametrize("pass_stored", [False, True])
+def test_faster_shadow(n_process, d_model, batch_size, n_expert, group_sz, pass_stored):
     _run_distributed('_test_faster_shadow',
             n_process,
             {
                 'd_model': d_model,
                 'batch_size': batch_size,
-                'n_expert': n_expert
+                'n_expert': n_expert,
+                'pass_stored': pass_stored
             },
             script=__file__,
             env=dict(
-                FMOE_FASTER_GROUP_SIZE=str(group_sz)
+                FMOE_FASTER_GROUP_SIZE=str(group_sz),
+                FMOE_FASTER_SHADOW_ENABLE='ON'
             )
     )
 
 
-def _test_faster_shadow(d_model, batch_size, n_expert):
+def _test_faster_shadow(d_model, batch_size, n_expert, pass_stored):
     _ensure_initialized()
     rank = dist.get_rank()
     world_size = dist.get_world_size()
@@ -58,15 +61,20 @@ def _test_faster_shadow(d_model, batch_size, n_expert):
         y = m2(x)
         return y
 
-    stored_models = torch.randint(0, 2, (world_size,)).bool().cuda()
-    dist.broadcast(stored_models, 0)
-    stored_models = stored_models.cpu()
+    if pass_stored:
+        stored_models = torch.randint(0, 2, (world_size,)).bool().cuda()
+        dist.broadcast(stored_models, 0)
+        stored_models = stored_models.cpu()
 
     # if rank == 0:
          # print('stored models {}'.format(stored_models))
 
     ensure_comm(x1, None)
-    y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=m1, stored_models=stored_models)
+    if pass_stored:
+        y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=m1, 
+                stored_models=stored_models)
+    else:
+        y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=m1)
     y1.sum().backward()
 
     y2 = naive_fwd(x2, topk_idx, ef2, n_expert, world_size, experts=m2)
@@ -82,4 +90,4 @@ if __name__ == '__main__':
         locals()[sys.argv[1]](**args)
     else:
         # test_faster_shadow(8, 16, 16, 1, 2)
-        _test_faster_shadow(4, 2, 1)
+        _test_faster_shadow(1024, 16, 1, True)
