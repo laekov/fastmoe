@@ -1,3 +1,19 @@
+## v1.0.0
+
+### FasterMoE
+
+* The new performance boosting features in the PPoPP'22 paper FasterMoE, detailed in the document.
+	* Expert Shadowing.
+	* Smart Scheduling.
+	* Topology-aware gate.
+
+### Bug fixes
+
+* Transformer-XL examples.
+* Compatibility to PyTorch versions.
+* Megatron-LM documents.
+* GShardGate.
+
 ## v0.3.0
 
 ### FMoE core
