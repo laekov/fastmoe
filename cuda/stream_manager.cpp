@@ -3,21 +3,34 @@
 #include <cassert>
 #include <thread>
 #include <iostream>
+#include <c10/cuda/CUDAGuard.h>
+#include <ATen/cuda/CUDAContext.h>
 
+#include "fastermoe/status.h"
 #include "stream_manager.h"
 
 #define SMGR_N_STREAMS 16
 
+
 cudaStream_t CudaStreamManager::stream(size_t idx) {
+    if (this->use_default) {
+        return c10::cuda::getCurrentCUDAStream().stream();
+    }
     return this->streams[idx % SMGR_N_STREAMS];
 }
 
 cublasHandle_t CudaStreamManager::handle(size_t idx) {
+    if (this->use_default) {
+        return at::cuda::getCurrentCUDABlasHandle();
+    }
     return this->handles[idx % SMGR_N_STREAMS];
 }
 
 
 void CudaStreamManager::sync(int idx) {
+    if (this->use_default) {
+        return;
+    }
     for (int i = 0; i < idx && i < SMGR_N_STREAMS; ++i) {
         cudaStreamSynchronize(streams[i]);
     }

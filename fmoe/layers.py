@@ -11,6 +11,8 @@ from .functions import MOEScatter, MOEGather
 from .functions import AllGather, Slice
 from .gates import NaiveGate
 
+from .fastermoe.config import switch_from_env
+
 
 def mark_module_parallel_comm(module, comm):
     r"""
@@ -21,7 +23,7 @@ def mark_module_parallel_comm(module, comm):
         setattr(p, "dp_comm", comm)
 
 
-def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
+def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size, **kwargs):
     r"""
     A private function that performs the following steps to complete the MoE
     computation.
@@ -76,7 +78,9 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, num_expert, world_size):
     return outp
 
 
-if os.environ.get('FMOE_FASTER_SCHEDULE_ENABLE', '0') in ['1', 'ON']:
+fmoe_faster_schedule = False
+if switch_from_env('FMOE_FASTER_SCHEDULE_ENABLE', False):
+    fmoe_faster_schedule = True
     from .fastermoe.schedule import _fmoe_general_global_forward
 
 
@@ -227,7 +231,9 @@ class FMoE(nn.Module):
             gate_top_k_idx = gate_top_k_idx[mask == 0, :]
 
         fwd = _fmoe_general_global_forward(
-            moe_inp, gate_top_k_idx, self.expert_fn, self.num_expert, self.world_size
+            moe_inp, gate_top_k_idx, self.expert_fn,
+            self.num_expert, self.world_size,
+            experts=self.experts
         )
 
         # recover deleted tensors
