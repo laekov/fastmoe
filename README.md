@@ -99,7 +99,19 @@ FastMoE's model parallel requires sophiscated parallel strategies that neither P
 Megatron-LM provides. The `fmoe.DistributedGroupedDataParallel` module is
 introduced to replace PyTorch's DDP module.
 
+#### Faster Performance Features
+
+From a PPoPP'22 paper, _FasterMoE: modeling and optimizing training of
+large-scale dynamic pre-trained models_, we have adopted techniques to make
+FastMoE's model parallel much more efficient.
+
+These optimizations are named as **Faster Performance Features**, and can be
+enabled via several environment variables. Their usage and constraints are
+detailed in [a separate document](doc/fastermoe).
+
 ## Citation
+
+For the core FastMoE system.
 
 ```
 @article{he2021fastmoe,
@@ -107,6 +119,27 @@ introduced to replace PyTorch's DDP module.
       author={Jiaao He and Jiezhong Qiu and Aohan Zeng and Zhilin Yang and Jidong Zhai and Jie Tang},
       journal={arXiv preprint arXiv:2103.13262},
       year={2021}
+}
+```
+
+For the [faster performance features](doc/fastermoe).
+
+```
+@inproceedings{he2022fastermoe,
+    author = {He, Jiaao and Zhai, Jidong and Antunes, Tiago and Wang, Haojie and Luo, Fuwen and Shi, Shangfeng and Li, Qin},
+    title = {FasterMoE: Modeling and Optimizing Training of Large-Scale Dynamic Pre-Trained Models},
+    year = {2022},
+    isbn = {9781450392044},
+    publisher = {Association for Computing Machinery},
+    address = {New York, NY, USA},
+    url = {https://doi.org/10.1145/3503221.3508418},
+    doi = {10.1145/3503221.3508418},
+    booktitle = {Proceedings of the 27th ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming},
+    pages = {120–134},
+    numpages = {15},
+    keywords = {parallelism, distributed deep learning, performance modeling},
+    location = {Seoul, Republic of Korea},
+    series = {PPoPP '22}
 }
 ```
 

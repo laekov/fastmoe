@@ -61,6 +61,8 @@ class MoEForward(Function):
         out = _local_gather(local_output_buf, pos_g, out_batch_size,
                 maybe_overlap=False)
         
+        # gib and local_input_buf are necessary, because ctx.gibs are created
+        # based on their memory
         variables = (pos_s, pos_g, local_expert_count, global_expert_count,
                 stored_models, gib, local_input_buf)
         
