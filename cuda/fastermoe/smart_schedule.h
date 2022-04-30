@@ -80,6 +80,9 @@ void computeFn(py::function fn, c10::Device device,
         scalar_t* inp_buf, scalar_t* out_buf,
         long idx, long offset, long micro_batch_size, long d_model,
         CudaStreamManager* smgr) {
+    if(micro_batch_size == 0) {
+        return;
+    }
     auto options = torch::TensorOptions()
         .dtype(c10::CppTypeToScalarType<scalar_t>::value)
         .device(device)
