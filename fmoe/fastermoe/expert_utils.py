@@ -53,6 +53,6 @@ def set_grads(e, grads):
         seg = grads[offset:offset + p.numel()]
         offset += p.numel()
         if p.grad is None:
-            p.grad = seg.clone()
+            p.grad = seg.clone().reshape(p.shape)
         else:
             p.grad += seg.reshape(p.shape)
