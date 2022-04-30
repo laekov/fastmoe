@@ -29,6 +29,8 @@ def stash_expert_params(e, params):
 def pop_expert_params(e):
     if not hasattr(e, 'expert_param_stash'):
         return
+    if not e.expert_param_stash:
+        return
     for n, p in e.named_parameters():
         with torch.no_grad():
             p.copy_(e.expert_param_stash[n])
