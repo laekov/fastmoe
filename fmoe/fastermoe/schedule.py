@@ -35,7 +35,7 @@ class MoEForward(Function):
                 x.requires_grad = True
                 # To skip torch autograd's version check.
                 with torch.autograd.graph.saved_tensors_hooks(nothing, nothing):
-                    y0 = expert_fn(x, [x.shape[0]])
+                    y0 = expert_fn(x, torch.tensor([x.shape[0]], dtype=torch.int64))
             ctx.gibs[idx] = x
             ctx.gobs[idx] = y0
             y.copy_(y0)
