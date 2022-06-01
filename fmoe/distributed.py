@@ -78,6 +78,12 @@ class DistributedGroupedDataParallel(nn.Module):
         self._sync_params()
 
     def _sync_params(self):
+        r"""
+        Note that this module does not guarantee initial consistency of
+        parameters. Users are supposed to manually initalize the model on
+        different workers with the same parameters using either this function
+        or other methods like pre-defined random seeds. 
+        """
         groups = dict()
         for p in self.module.parameters():
             if not p.requires_grad or p.grad is None:
