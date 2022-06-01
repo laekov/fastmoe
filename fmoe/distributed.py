@@ -26,6 +26,7 @@ class DistributedGroupedDataParallel(nn.Module):
         self,
         module,
         auto_allreduce=False,
+        need_sync=True,
         **kwargs
     ):
         assert not auto_allreduce, "Automatic all-reduce is not implemented yet"
@@ -75,7 +76,8 @@ class DistributedGroupedDataParallel(nn.Module):
                     g.copy_(s)
 
         self.allreduce_params = allreduce_params
-        self._sync_params()
+        if need_sync:
+            self._sync_params()
 
     def _sync_params(self):
         groups = dict()
