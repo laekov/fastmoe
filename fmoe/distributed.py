@@ -4,7 +4,7 @@ Supportive modules to conduct distributed training
 import torch
 import torch.nn as nn
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
-from .utils import get_torch_default_comm
+from .utils import get_torch_default_comm, get_rank_0_in_comm
 
 
 class DistributedGroupedDataParallel(nn.Module):
@@ -97,7 +97,8 @@ class DistributedGroupedDataParallel(nn.Module):
             comm = self.comms[dp_comm]
             datas = [p.data for p in group]
             coalesced = _flatten_dense_tensors(datas)
-            torch.distributed.broadcast(coalesced, 0, group=comm)
+            torch.distributed.broadcast(coalesced,
+                    get_rank_0_in_comm(comm), group=comm)
             torch.cuda.synchronize()
             synced = _unflatten_dense_tensors(coalesced, datas)
             for d, s in zip(datas, synced):

@@ -71,7 +71,7 @@ class MyMoE(FMoE):
             d_model=d_model,
             gate=NaiveGate,
             world_size=world_size,
-            mp_group=mp_group,
+            slice_group=mp_group,
             top_k=top_k,
         )
         self.experts = _Expert(num_expert, d_model, d_hidden, activation)
@@ -344,6 +344,7 @@ def _test_fmoe_local_ddp(rank, world_size, mp_group, dp_group, world_group):
     model = MyModule().cuda()
     model_ddp = LocalDDP(deepcopy(model),
             mp_group=mp_group, dp_group=dp_group, world_group=world_group)
+    model = deepcopy(model_ddp.module)
     model.set_comm()
     model_ddp.module.set_comm()
 
