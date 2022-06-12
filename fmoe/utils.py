@@ -1,6 +1,7 @@
 r"""
 Utils to play with PyTorch.
 """
+import torch
 import torch.distributed as dist
 
 
@@ -28,3 +29,13 @@ def get_torch_default_comm():
     except Exception as _:
         pass
     raise RuntimeError("Unsupported PyTorch version")
+
+
+def get_rank_0_in_comm(comm):
+    world_size = dist.get_world_size(comm)
+    x = torch.tensor([dist.get_rank()], dtype=torch.int64, device='cuda')
+    ys = [torch.empty_like(x) for _ in range(world_size)]
+    dist.all_gather(ys, x, group=comm)
+    root_rank = ys[0].item()
+    return root_rank
+
