@@ -109,6 +109,12 @@ public:
             ncclGetUniqueId(&ncclID);
         }
 #if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR > 1 || \
+        (TORCH_VERSION_MAJOR == 1 && TORCH_VERSION_MINOR >= 12))
+        broadcastUniqueNCCLID(&ncclID,
+                false,
+                "fastmoe_nccl_comm",
+                rank);
+#elif defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR > 1 || \
         (TORCH_VERSION_MAJOR == 1 && TORCH_VERSION_MINOR >= 8))
         broadcastUniqueNCCLID(&ncclID,
                 c10d::OpType::SEND,
