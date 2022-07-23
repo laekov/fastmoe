@@ -25,8 +25,8 @@ FastMoE contains a set of PyTorch customized opearators, including both C and
 Python components. Use `python setup.py install` to easily install and enjoy
 using FastMoE for training.
 
-The distributed expert feature is disabled by default. If you want to enable
-it, pass environment variable `USE_NCCL=1` to the setup script.
+The distributed expert feature is enabled by default. If you want to disable
+it, pass environment variable `USE_NCCL=0` to the setup script.
 
 Note that an extra NCCL developer package is needed, which has to be consistent
 with your PyTorch's NCCL version, which can be inspected by running
