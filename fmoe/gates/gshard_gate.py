@@ -21,8 +21,7 @@ class GShardGate(NaiveGate):
         topk_idx, topk_val, gate_score = naive_outs
 
         S = gate_score.shape[0]
-        top_k = topk_idx.shape[0] // gate_score.shape[0]
-        top1_idx = topk_idx.view((-1, top_k))[:, 0]
+        top1_idx = topk_idx.view((-1, self.top_k))[:, 0]
         c_e = torch.scatter_add(
                 torch.zeros(self.tot_expert, device=top1_idx.device),
                 0,
