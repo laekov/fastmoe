@@ -14,7 +14,11 @@ model for PyTorch.
 ### Prerequisites
 
 PyTorch with CUDA is required. The repository is currently tested with PyTorch
-v1.8.0 and CUDA 10, with designed compatibility to older versions.
+v1.10.0 and CUDA 11.3, with designed compatibility to older and newer versions.
+
+The minimum version of supported PyTorch is `1.7.2` with CUDA `10`. However,
+there are a few known issues that requires manual modification of FastMoE's
+code with specific older dependents.
 
 If the distributed expert feature is enabled, NCCL with P2P communication
 support, typically versions `>=2.7.5`, is needed. 

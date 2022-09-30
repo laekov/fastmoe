@@ -12,8 +12,11 @@ FastMoE 是一个易用且高效的基于 PyTorch 的 MoE 模型训练系统.
 
 ### 依赖
 
-启用了 CUDA 的 PyTorch 是必要的. 当前版本的 FastMoE 在 PyTorch v1.8.0 和 CUDA 10
-的平台上经过了测试. 本系统从设计上也支持更旧的 PyTorch 版本.
+启用了 CUDA 的 PyTorch 是必要的. 当前版本的 FastMoE 在 PyTorch v1.10.0 和 CUDA
+11 的平台上经过了测试. 本系统从设计上也支持更旧或更新的 PyTorch 版本.
+
+已知最老的支持的版本是 PyTorch `1.7.0` 和 CUDA `10`,
+但已知某些老版本可能需要修改 FastMoE 的代码以实现支持.
 
 如果需要使能 FastMoE 模型并行特性, 那么支持点对点通信的 NCCL 库 (即不旧于
 `2.7.5` 版本) 也是必需的.
