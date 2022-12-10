@@ -169,7 +169,8 @@ void fmoe_cuda_fused_forward_impl(
             if (i / num_expert == rank) {
                 cudaEventCreate(&evt_get);
                 cudaEventRecord(evt_get, torch_stream);
-                cudaStreamWaitEvent(smgr->stream(1), evt_get);
+                cudaStreamWaitEvent(smgr->stream(1), evt_get, 0);
+//                cudaStreamWaitEvent(smgr->stream(1), evt_get);
                 cudaEventDestroy(evt_get);
             }
             NCCL_SAFE_CALL(ncclBcast((void*)params[si].data_ptr<scalar_t>(),
