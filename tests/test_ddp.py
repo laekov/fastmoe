@@ -35,6 +35,7 @@ def _run_distributed(func, world_size, args: Dict, script=__file__, env=dict()):
     env["MASTER_ADDR"] = "localhost"
     env["MASTER_PORT"] = str(random.randint(50000, 60000))
     env["OMPI_COMM_WORLD_SIZE"] = str(world_size)
+    env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH")
 
     for i in range(world_size):
         env["OMPI_COMM_WORLD_RANK"] = str(i)
