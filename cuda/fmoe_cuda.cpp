@@ -5,7 +5,14 @@
 
 // global_exchange
 #ifdef FMOE_USE_NCCL
+
+#if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR > 1 || \
+        (TORCH_VERSION_MAJOR == 1 && TORCH_VERSION_MINOR >= 13))
+#include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
+#else
 #include <c10d/ProcessGroupNCCL.hpp>
+#endif
+
 torch::Tensor _expert_exchange(
         torch::Tensor local_expert_count,
         long n_expert, long n_workers);

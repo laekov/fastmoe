@@ -98,7 +98,12 @@ torch::Tensor _global_gather(
     return local_output_buf;
 }
 
+#if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR > 1 || \
+        (TORCH_VERSION_MAJOR == 1 && TORCH_VERSION_MINOR >= 13))
+#include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
+#else
 #include <c10d/ProcessGroupNCCL.hpp>
+#endif
 
 class HackNCCLGroup: public c10d::ProcessGroupNCCL {
 public:
