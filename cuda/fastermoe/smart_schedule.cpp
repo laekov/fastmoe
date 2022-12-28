@@ -48,7 +48,7 @@ void _reduce_grad(
     cudaEvent_t evt_stash;
     cudaEventCreate(&evt_stash);
     cudaEventRecord(evt_stash, torch_stream);
-    cudaStreamWaitEvent(smgr->stream(0), evt_stash, 0);
+    FMOE_SWE(smgr->stream(0), evt_stash);
     cudaEventDestroy(evt_stash);
 
     auto dtype = getNcclDataType(t.scalar_type());
