@@ -68,7 +68,6 @@ class DistributedGroupedDataParallel(nn.Module):
                 if not no_scale and not reduce_after:
                     coalesced /= comm.size()
                 torch.distributed.all_reduce(coalesced, group=comm)
-                torch.cuda.synchronize()
                 if not no_scale and reduce_after:
                     coalesced /= comm.size()
                 synced = _unflatten_dense_tensors(coalesced, grads)
