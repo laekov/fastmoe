@@ -235,6 +235,7 @@ void fmoe_cuda_fused_forward_impl(
             NCCL_SAFE_CALL(ncclGroupEnd());
         }
     }
+    smgr->sync(1);
 
     delete [] local_ptr;
     delete [] global_ptr;
@@ -381,6 +382,7 @@ void fmoe_cuda_fused_backward_impl(
         }
     }
 
+    smgr->sync(1);
     checkCudaErrors(cudaGetLastError());
 
     delete [] local_ptr;

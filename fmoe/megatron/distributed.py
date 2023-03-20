@@ -14,6 +14,10 @@ def _set_groups(**kwargs):
     _groups = kwargs
 
 
+def get_moe_group():
+    return _groups["moe_group"]
+
+
 def _init():
     from megatron import get_args
     from megatron import mpu
@@ -39,11 +43,20 @@ class DistributedDataParallel(DistributedGroupedDataParallel):
     is adapted to enable the sophiscated parallel and reduction strategies in
     Fast MoE.
     """
-
-    def __init__(self, module):
+    
+    def __init__(self, module, accumulate_allreduce_grads_in_fp32=False, use_contiguous_buffers_in_ddp=False):
+        assert not accumulate_allreduce_grads_in_fp32, "FastMoE not supports accumulate_allrecude_grads_in_fp32"
+        assert not use_contiguous_buffers_in_ddp, "FastMoE not supports use_contiguous_buffers_in_ddp"
+        
         if _groups is None:
             _init()
         super().__init__(module, **_groups)
+
+    def set_input_tensor(self, *args, **kwargs):
+        r"""
+        Keep consitency with Megatron
+        """
+        return self.module.set_input_tensor(*args, **kwargs)
 
     def state_dict(self, *args, **kwargs):
         r"""

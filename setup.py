@@ -29,6 +29,9 @@ if os.environ.get('USE_NCCL', '1') == '1':
     else:
         ext_libs.append('nccl')
 
+if os.environ.get('MOE_DEBUG', '0') == '1':
+    cxx_flags.append('-DMOE_DEBUG')
+
 if is_rocm_pytorch:
     define_macros=[('FMOE_USE_HIP', None)]
 else:

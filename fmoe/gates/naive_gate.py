@@ -37,6 +37,9 @@ class NaiveGate(BaseGate):
         # (BxL) x 1 x top_k
         gate_score = F.softmax(gate_top_k_val, dim=-1)
 
+        # dummy loss
+        self.set_loss(torch.zeros(1, requires_grad=True).cuda())
+
         if return_all_scores:
             return gate_top_k_idx, gate_score, gate
         return gate_top_k_idx, gate_score
