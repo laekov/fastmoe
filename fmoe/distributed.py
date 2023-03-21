@@ -42,7 +42,7 @@ class DistributedGroupedDataParallel(nn.Module):
             if k not in self.comms:
                 self.comms[k] = get_torch_default_comm()
 
-        def allreduce_params(no_scale=False,
+        def allreduce_gradients(no_scale=False,
                 reduce_after=False, fp32_allreduce=False):
             groups = dict()
             for p in self.module.parameters():
@@ -74,6 +74,10 @@ class DistributedGroupedDataParallel(nn.Module):
                 for g, s in zip(grads, synced):
                     g.copy_(s)
 
+        def allreduce_params(*args, **kwargs):
+            return allreduce_gradients(*args, **kwargs)
+
+        self.allreduce_gradients = allreduce_gradients
         self.allreduce_params = allreduce_params
         if need_sync:
             self._sync_params()

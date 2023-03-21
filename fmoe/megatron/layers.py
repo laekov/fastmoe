@@ -151,6 +151,7 @@ def fmoefy(
     hidden_hidden_size=None,
     top_k=None,
     gate=None,
+    megatron_version=None
 ):
     r"""
     Replace MLP layers in a transformer-based model in Megatron by MoE.
@@ -184,11 +185,28 @@ def fmoefy(
 
     args.hidden_hidden_size = hidden_hidden_size
 
-    for idx, l in enumerate(model.language_model.transformer.layers):
-        l.mlp = MegatronMLP(args, idx, gate=gate)
+    if megatron_version == "v2.2":
 
-    # initialize gate hook
-    num_layers = len(model.language_model.transformer.layers)
+        for idx, l in enumerate(model.language_model.transformer.layers):
+            l.mlp = MegatronMLP(args, idx, gate=gate)
+
+        # initialize gate hook
+        num_layers = len(model.language_model.transformer.layers)
+    elif megatron_version == "v2.5":
+        
+        for idx, l in enumerate(model.language_model.encoder.layers):
+            l.mlp = MegatronMLP(args, idx, gate=gate)
+        if hasattr(model.language_model, "decoder"):
+            for idx, l in enumerate(model.language_model.decoder.layers):
+                l.mlp = MegatronMLP(args, idx, gate=gate)
+
+        # initialize gate hook
+        num_layers = len(model.language_model.encoder.layers)
+        if hasattr(model.language_model, "decoder"):
+            num_layers += len(model.language_model.decoder.layers)
+    else:
+        assert False, f"megatron_version {megatron_version} not known."
+
     reset_gate_hook(num_layers)
 
     return model
