@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from .layers import FMoE
 from .linear import FMoELinear
+from .fastermoe.config import switch_from_env
 
 
 class _Expert(nn.Module):
@@ -47,10 +48,11 @@ class FMoETransformerMLP(FMoE):
         expert_rank=0,
         **kwargs
     ):
-        super().__init__(num_expert=num_expert, d_model=d_model, **kwargs)
-        self.experts = _Expert(
-            num_expert, d_model, d_hidden, activation, rank=expert_rank
-        )
+        def one_expert(d_model):
+            return _Expert(1, d_model, d_hidden, activation, rank=0)
+        
+        expert = one_expert
+        super().__init__(num_expert=num_expert, d_model=d_model, expert=expert, **kwargs)
         self.mark_parallel_comm(expert_dp_comm)
 
     def forward(self, inp: torch.Tensor):

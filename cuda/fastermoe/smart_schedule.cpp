@@ -104,7 +104,7 @@ std::vector<torch::Tensor> _smart_sch_forward(
         if (stored_models_[i]) {
             torch::Tensor t = input_buf.new_empty({expert_size});
             if (i / num_expert == rank) {
-                get_param_fn(t);
+                get_param_fn(t, i % num_expert);
             }
             params.push_back(t);
         }
