@@ -159,15 +159,23 @@ class FMoE(nn.Module):
         if self.experts_fused:
             return self.experts(inp, fwd_expert_count)
         if isinstance(fwd_expert_count, torch.Tensor):
-            fwd_expert_count = fwd_expert_count.cpu().numpy()
+            fwd_expert_count_cpu = fwd_expert_count.cpu().numpy()
         outputs = []
         base_idx = 0
         for i in range(self.num_expert):
-            batch_size = fwd_expert_count[i]
+            batch_size = fwd_expert_count_cpu[i]
             inp_slice = inp[base_idx : base_idx + batch_size]
-            outputs.append(self.experts[i](inp_slice))
+            outputs.append(self.experts[i](inp_slice, torch.tensor([fwd_expert_count[i]])))
             base_idx += batch_size
         return torch.cat(outputs, dim=0)
+
+    def expert_fn_single(self, inp, fwd_expert_count, idx):
+        r"""
+        forward single expert for smart scheduling.
+        """
+        assert not self.experts_fused, "should not use fused experts"
+        output = self.experts[idx](inp, fwd_expert_count)
+        return output
 
     def mark_parallel_comm(self, expert_dp_comm="none"):
         r"""
@@ -231,7 +239,7 @@ class FMoE(nn.Module):
             gate_top_k_idx = gate_top_k_idx[mask == 0, :]
 
         fwd = _fmoe_general_global_forward(
-            moe_inp, gate_top_k_idx, self.expert_fn,
+            moe_inp, gate_top_k_idx, self.expert_fn_single if fmoe_faster_schedule else self.expert_fn,
             self.num_expert, self.world_size,
             experts=self.experts
         )

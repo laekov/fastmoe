@@ -130,9 +130,20 @@ class MegatronMLP(FMoETransformerMLP):
         additional numpy rng is used.
         """
         rng = np.random.default_rng(np.random.randint(2048) + self.rank)
-        _megatron_init_method(self.experts.htoh4, rng, self.sigma)
+        
+        if type(self.experts) is nn.ModuleList:
+            for expert in self.experts:
+                _megatron_init_method(expert.htoh4, rng, self.sigma)
+        else:
+            _megatron_init_method(self.experts.htoh4, rng, self.sigma)
+        
         std = self.sigma / math.sqrt(2.0 * self.num_layers)
-        _megatron_init_method(self.experts.h4toh, rng, std)
+        
+        if type(self.experts) is nn.ModuleList:
+            for expert in self.experts:
+                _megatron_init_method(expert.h4toh, rng, std)
+        else:
+            _megatron_init_method(self.experts.h4toh, rng, std)
 
     def forward(self, inp):
         from megatron import mpu
