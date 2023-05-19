@@ -63,14 +63,14 @@ class FMoELinear(nn.Module):
             self.bias = nn.Parameter(torch.zeros(num_expert, out_feat))
         else:
             self.register_parameter("bias", None)
-
+          
         self.reset_parameters()
 
     def forward(self, inp, fwd_expert_count):
         r"""
         Call MOE function
         """
-        x = MOELinear.apply(inp, fwd_expert_count, self.weight, self.bias)
+        x = MOELinear.apply(inp.type_as(self.weight), fwd_expert_count, self.weight, self.bias)
         return x
 
     def extra_repr(self) -> str:
