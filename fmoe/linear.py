@@ -70,7 +70,7 @@ class FMoELinear(nn.Module):
         r"""
         Call MOE function
         """
-        x = MOELinear.apply(inp, fwd_expert_count, self.weight, self.bias)
+        x = MOELinear.apply(inp.type_as(self.weight), fwd_expert_count, self.weight, self.bias)
         return x
 
     def extra_repr(self) -> str:
