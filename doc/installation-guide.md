@@ -8,7 +8,12 @@ python -c  'import torch; print(torch.__version__); print(torch.cuda.nccl.versio
 >>> 2.0.1+cu117
 >>> (2, 14, 3)  # -> this means version 2.14.3
 
-# to check cuda version just type to see which cuda version you are using, should output something like this:
+# to check cuda version you can use one of this two options with a similar output,
+# the binary path (second option) might be needed for troubleshooting:
+
+nvcc --version
+>>> Cuda compilation tools, release 11.7, V11.7.99
+>>> Build cuda_11.7.r11.7/compiler.31442593_0
 
 which nvcc
 >>> /usr/local/cuda-11.7/bin/nvcc
@@ -46,16 +51,18 @@ python setup.py install
 
 #### Troubleshooting
 
-If you have errors (warnings are OK) during the compilation make sure that the installer has the correct flags, this can be seen in the error as `-I/home/path/to/bin` and `-L/home/path/to/lib`. This flags should point to the correct CUDA for which all the other packages are compatible (torch and NCCL), if this paths are not correct you'll have to tell the system explicitly which CUDA version you want to use. A simple solution could be like this:
+If you have errors (warnings are OK) during the compilation make sure that the installer has the correct flags, this can be seen in the error as `-I/path/to/xxx/bin` and `-L/path/to/xxx/lib`. This flags should point to the correct CUDA for which all the other packages are compatible (torch and NCCL), if this paths are not correct you'll have to tell the system explicitly which CUDA version you want to use. Simple solutions could be this:
 ```
-# add this lines at the end of your ~/.bashrc
+# (suggested) export the correct paths before compiling
+
+export PATH="/usr/local/cuda-11.7/bin:$PATH"
+export LD_LIBRARY_PATH="/usr/local/cuda-11.7/lib:$LD_LIBRARY_PATH"
+python setup.py install
+
+# eventually add these to your ~/.bashrc as an option to reduce future works
 
 nano ~/.bashrc
 export PATH="/usr/local/cuda-11.7/bin:$PATH"
 export LD_LIBRARY_PATH="/usr/local/cuda-11.7/lib:$LD_LIBRARY_PATH"
-
-# update the ~/.bashrc and try again
-
 source ~/.bashrc
-cd fastmoe && python setup.py install
 ```
