@@ -29,6 +29,8 @@ FastMoE contains a set of PyTorch customized opearators, including both C and
 Python components. Use `python setup.py install` to easily install and enjoy
 using FastMoE for training.
 
+A step-by-step tutorial for the installation procedure can be found [here](doc/installation-guide.md).
+
 The distributed expert feature is enabled by default. If you want to disable
 it, pass environment variable `USE_NCCL=0` to the setup script.
 
