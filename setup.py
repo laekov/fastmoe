@@ -41,7 +41,7 @@ else:
 if __name__ == '__main__':
     setuptools.setup(
         name='fastmoe',
-        version='1.0.0',
+        version='1.0.1',
         description='An efficient Mixture-of-Experts system for PyTorch',
         author=', '.join(authors),
         author_email='hja20@mails.tsinghua.edu.cn',
