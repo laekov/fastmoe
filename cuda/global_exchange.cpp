@@ -100,6 +100,7 @@ torch::Tensor _global_gather(
 
 #if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR > 1 || \
         (TORCH_VERSION_MAJOR == 1 && TORCH_VERSION_MINOR >= 13))
+#include <torch/csrc/distributed/c10d/ProcessGroup.hpp>
 #include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
 #else
 #include <c10d/ProcessGroupNCCL.hpp>
@@ -134,12 +135,21 @@ public:
     }
 };
 
+#if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR >= 2)
+void _ensure_nccl(c10d::ProcessGroup& p, torch::Tensor t) {
+#else
 void _ensure_nccl(c10d::ProcessGroupNCCL& p, torch::Tensor t) {
+#endif  // TORCH_VERSION
     auto smgr = getCudaStreamManager(t.device().index());
     if (smgr->ncclgood) {
         return;
     }
+#if defined(TORCH_VERSION_MAJOR) && (TORCH_VERSION_MAJOR >= 2)
+    HackNCCLGroup* h = (HackNCCLGroup*)(void*)
+        (p.getBackend(c10d::ProcessGroup::NCCL).get());
+#else
     HackNCCLGroup* h = (HackNCCLGroup*)(void*)&p;
+#endif  // TORCH_VERSION
     smgr->ncclcomm = h->getcomm(t.device());
     if (smgr->ncclcomm != 0) {
         smgr->ncclgood = 1;

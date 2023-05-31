@@ -1,3 +1,19 @@
+## v1.0.1
+
+### Compatibility
+
+* PyTorch 2.0 supported.
+* Megatron-LM 2.5 supported.
+
+### Documentation
+
+* A detailed [installation guide]([installation-guide.md](https://github.com/laekov/fastmoe/blob/master/doc/installation-guide.md) thanks to @santurini
+
+### Performance related
+
+* Generalize FasterMoE's schedule to `n_expert > 1` and more bug fixes.
+* Synchronization reduction thanks to @Fragile-azalea
+
 ## v1.0.0
 
 ### FasterMoE
