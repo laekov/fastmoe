@@ -30,7 +30,7 @@ def patch_loss_func_v2_5(loss_func):
                 for l in model.language_model.encoder.layers
                 if l.mlp.gate.has_loss]
 
-        if hasattr(model.language_model, "decoder"):
+        if hasattr(model.language_model, "decoder") and model.language_model.decoder is not None:
             loss_list_decoder = [l.mlp.gate.get_loss(clear=False).view(1)
                     for l in model.language_model.decoder.layers
                     if l.mlp.gate.has_loss]
@@ -125,6 +125,8 @@ def patch_forward_step(forward_step_func, Megatron_Version="v2.2"):
         return forward_step_with_balance_loss_v2_2
     elif Megatron_Version == "v2.5":
         return forward_step_with_balance_loss_v2_5
+    elif Megatron_Version == "v3.0.2":
+        return forward_step_with_balance_loss_v2_5
     else:
         assert False, f"megatron version {Megatron_Version} not known."
 
@@ -143,7 +145,7 @@ def patch_model_provider(model_provider, gate=None, Megatron_Version='v2.2'):
         hhs = hhs // args.tensor_model_parallel_size
         return fmoefy(
             model_provider(),
-            num_experts=args.num_experts,
+            fmoe_num_experts=args.fmoe_num_experts,
             hidden_hidden_size=hhs,
             top_k=args.top_k,
             gate=gate,
@@ -160,16 +162,35 @@ def patch_model_provider(model_provider, gate=None, Megatron_Version='v2.2'):
         hhs = hhs // args.tensor_model_parallel_size
         return fmoefy(
             model_provider(pre_process=pre_process, post_process=post_process),
-            num_experts=args.num_experts,
+            fmoe_num_experts=args.fmoe_num_experts,
             hidden_hidden_size=hhs,
             top_k=args.top_k,
             gate=gate,
             megatron_version="v2.5"
+        )
+    
+    def fmoefied_model_provider_v3_0_2(pre_process, post_process):
+        from .layers import fmoefy
+        args = get_args()
+        hhs = args.hidden_size * 4
+        assert hhs % args.top_k == 0
+        hhs = hhs // args.top_k
+        assert hhs % args.tensor_model_parallel_size == 0
+        hhs = hhs // args.tensor_model_parallel_size
+        return fmoefy(
+            model_provider(pre_process=pre_process, post_process=post_process),
+            fmoe_num_experts=args.fmoe_num_experts,
+            hidden_hidden_size=hhs,
+            top_k=args.top_k,
+            gate=gate,
+            megatron_version="v3.0.2"
         )
 
     if Megatron_Version == 'v2.2':
         return fmoefied_model_provider_v2_2
     elif Megatron_Version == 'v2.5':
         return fmoefied_model_provider_v2_5
+    elif Megatron_Version == 'v3.0.2':
+        return fmoefied_model_provider_v3_0_2
     else:
         assert False, f"Megatron Version {Megatron_Version} unknown."

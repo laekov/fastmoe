@@ -50,7 +50,7 @@ Transformer 模型变为一个  MoE 的模型. 其使用方法如下.
 model = ...
 
 from fmoe.megatron import fmoefy
-model = fmoefy(model, num_experts=<number of experts per worker>)
+model = fmoefy(model, fmoe_num_experts=<number of experts per worker>)
 
 train(model, ...)
 ```

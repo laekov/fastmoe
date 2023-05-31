@@ -25,7 +25,7 @@ transformer language models.
 
 ```python
 from fmoe.megatron import fmoefy
-model = fmoefy(model, num_experts=4)
+model = fmoefy(model, fmoe_num_experts=4)
 ```
 
 Note that the `fmoefy` function currently only takes a standard Megatron-LM's
