@@ -30,7 +30,8 @@ torch::Tensor _linear_forward(
         output = torch::empty({batch_size, out_feat}, out_options);
     }
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), "moe_forward_cuda",
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16,
+            input_buf.scalar_type(), "moe_forward_cuda",
             ([&] {
         fmoe_cuda_linear_forward_impl<scalar_t>(
             input_buf.data_ptr<scalar_t>(),
@@ -72,7 +73,8 @@ std::vector<torch::Tensor> _linear_backward(
     auto grad_weight = grad_output_buf.new_empty({num_expert, out_feat, in_feat});
     auto grad_bias = grad_output_buf.new_empty({num_expert, out_feat});
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_buf.scalar_type(), "moe_cuda_backward", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16,
+            input_buf.scalar_type(), "moe_cuda_backward", ([&] {
         fmoe_cuda_linear_backward_impl<scalar_t>(
             grad_output_buf.data_ptr<scalar_t>(),
             input_buf.data_ptr<scalar_t>(),

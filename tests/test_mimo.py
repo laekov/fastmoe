@@ -108,7 +108,7 @@ class MyMoE(FMoE):
 @pytest.mark.parametrize("dp_group", [None])
 @pytest.mark.parametrize("world_group", [None])
 @pytest.mark.parametrize(
-    "data_type", ["torch.FloatTensor", "torch.DoubleTensor", "torch.HalfTensor"]
+    "data_type", [torch.float32, torch.float16, torch.bfloat16, torch.double]
 )
 @pytest.mark.parametrize("list_input", [False, True])
 def test_fmoe_mimo_linear(
@@ -138,9 +138,9 @@ def test_fmoe_mimo_linear(
         mp_group=mp_group,
         top_k=top_k,
         activation=activation,
-    ).cuda()
+    ).cuda().to(data_type)
 
-    x = torch.rand(batch_size, d_model).cuda()
+    x = torch.rand(batch_size, d_model).cuda().to(data_type)
     inp = [x, x.clone()] if list_input else {"x": x, "y": x.clone()}
     moe_out = moe(inp)
 
@@ -162,6 +162,6 @@ if __name__ == "__main__":
         mp_group=None,
         dp_group=None,
         world_group=None,
-        data_type=torch.float32,
+        data_type=torch.bfloat16,
         list_input=True
     )
