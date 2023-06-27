@@ -7,11 +7,11 @@ cxx_flags = []
 ext_libs = []
 
 authors = [
-        'Jiaao He', 
-        'Jiezhong Qiu', 
-        'Aohan Zeng', 
-        'Tiago Antunes', 
-        'Jinjun Peng', 
+        'Jiaao He',
+        'Jiezhong Qiu',
+        'Aohan Zeng',
+        'Tiago Antunes',
+        'Jinjun Peng',
         'Qin Li',
         'Mingshu Zhai'
 ]
@@ -37,6 +37,11 @@ if is_rocm_pytorch:
 else:
     define_macros=[]
 
+include_dirs = []
+if os.environ.get("NCCL_PATH"):
+    include_dirs.append(os.environ.get("NCCL_PATH")+'/include')
+    nccl_lib_path = os.environ.get("NCCL_PATH")+'/lib'
+    os.environ['LIBRARY_PATH'] = nccl_lib_path+':'+os.environ.get('LIBRARY_PATH','')
 
 if __name__ == '__main__':
     setuptools.setup(
@@ -50,7 +55,7 @@ if __name__ == '__main__':
         packages=['fmoe', 'fmoe.megatron', 'fmoe.gates', 'fmoe.fastermoe'],
         ext_modules=[
             CUDAExtension(
-                name='fmoe_cuda', 
+                name='fmoe_cuda',
                 sources=[
                     'cuda/stream_manager.cpp',
                     'cuda/local_exchange.cu',
@@ -65,7 +70,8 @@ if __name__ == '__main__':
                     'cxx': cxx_flags,
                     'nvcc': cxx_flags
                     },
-                libraries=ext_libs
+                libraries=ext_libs,
+                include_dirs=include_dirs
                 )
             ],
         cmdclass={
