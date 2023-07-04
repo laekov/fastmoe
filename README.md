@@ -59,7 +59,7 @@ multiple experts.
 model = ...
 
 from fmoe.megatron import fmoefy
-model = fmoefy(model, num_experts=<number of experts per worker>)
+model = fmoefy(model, fmoe_num_experts=<number of experts per worker>)
 
 train(model, ...)
 ```

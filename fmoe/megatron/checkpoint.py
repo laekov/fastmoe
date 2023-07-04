@@ -54,6 +54,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler):
     from megatron import get_args
     from megatron import mpu
     from megatron import print_rank_last
+    from megatron import utils
 
     expert_dp_comm = "none"
 
@@ -67,8 +68,13 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler):
     args = get_args()
 
     # Only rank zero of the data parallel writes to the disk.
-    if hasattr(model, 'module'):
-        model = model.module
+    try:
+        model = utils.unwrap_model(model)
+    except AttributeError:
+        # fallback to the old way of unwrapping a model
+        if hasattr(model, 'module'):
+            model = model.module
+        model = [model,]
 
     print_rank_last(
         "saving checkpoint at iteration {:7d} to {}".format(iteration, args.save)
@@ -76,7 +82,8 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler):
 
     # Arguments, iteration, and model.
     state_dict = {}
-    state_dict["model"] = model.state_dict_for_save_checkpoint(
+    assert len(model) == 1, "FMoE does not support interleaved pipelining, i.e., only supports len(model) == 1 for now."
+    state_dict["model"] = model[0].state_dict_for_save_checkpoint(
         keep_vars=(mpu.get_data_parallel_rank() > 0)
     )
 
@@ -215,6 +222,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg="load"):
     from megatron import get_args
     from megatron import mpu
     from megatron import print_rank_last
+    from megatron import utils
     from megatron.checkpointing import get_checkpoint_tracker_filename
     from megatron.checkpointing import set_checkpoint_version
     from megatron.checkpointing import check_checkpoint_args
@@ -229,8 +237,15 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg="load"):
     args = get_args()
     load_dir = getattr(args, load_arg)
 
-    if hasattr(model, 'module'):
-        model = model.module
+    # Only rank zero of the data parallel writes to the disk.
+    try:
+        model = utils.unwrap_model(model)
+    except AttributeError:
+        # fallback to the old way of unwrapping a model
+        if hasattr(model, 'module'):
+            model = model.module
+        model = [model,]
+
     # Read the tracker file and set the iteration.
     tracker_filename = get_checkpoint_tracker_filename(load_dir)
 
@@ -341,7 +356,8 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg="load"):
         print_rank_last("could not find arguments in the checkpoint ...")
 
     # Model.
-    model.load_state_dict(state_dict["model"])
+    assert len(model) == 1, "FMoE does not support interleaved pipelining, i.e., only supports len(model) == 1 for now."
+    model[0].load_state_dict(state_dict["model"])
 
     # Optimizer.
     if not release and not args.finetune and not args.no_load_optim:
@@ -350,9 +366,9 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg="load"):
                 optimizer.load_state_dict(state_dict["optimizer"])
             if lr_scheduler is not None:
                 lr_scheduler.load_state_dict(state_dict["lr_scheduler"])
-        except KeyError:
+        except KeyError as e:
             print_rank_last(
-                "Unable to load optimizer from checkpoint {}. "
+                "FMoE is unable to load optimizer from checkpoint {}. "
                 "Specify --no-load-optim or --finetune to prevent "
                 "attempting to load the optimizer state, "
                 "exiting ...".format(checkpoint_name_local)
@@ -367,9 +383,10 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg="load"):
             torch.set_rng_state(state_dict["torch_rng_state"])
             torch.cuda.set_rng_state(state_dict["cuda_rng_state"])
             mpu.get_cuda_rng_tracker().set_states(state_dict["rng_tracker_states"])
-        except KeyError:
+        except KeyError as e:
+            print_rank_last(e)
             print_rank_last(
-                "Unable to load optimizer from checkpoint {}. "
+                "FMoE is unable to load rng state from checkpoint {}. "
                 "Specify --no-load-rng or --finetune to prevent "
                 "attempting to load the optimizer state, "
                 "exiting ...".format(checkpoint_name_local)
