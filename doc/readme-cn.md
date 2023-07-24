@@ -64,7 +64,8 @@ train(model, ...)
 
 ### 分布式地使用 FastMoE
 
-FastMoE 支持数据并行和模型并行.
+FastMoE 支持并行方式. 详见[并行方式详细说明](doc/parallelism).
+以下简单介绍两种最容易使用的并行方式.
 
 #### 数据并行.
 
@@ -73,29 +74,30 @@ FastMoE 支持数据并行和模型并行.
 下图展示了一个有三个专家的两路数据并行MoE模型进行前向计算的方式.
 
 <p align="center">
-<img src="fastmoe_data_parallel.png" width="600">
+<img src="parallelism/fastmoe_data_parallel.png" width="600">
 </p>
 
 对于数据并行, 额外的代码是不需要的. FastMoE 与 PyTorch 的 `DataParallel` 和
 `DistributedDataParallel` 模块都可以无缝对接. 该方式唯一的问题是,
 专家的数量受到单个计算单元(如GPU)的内存大小限制.
 
-#### 模型并行
+#### 专家并行 (也曾被叫作模型并行)
 
-在 FastMoE 的模型并行模式中, 门网络依然是复制地被放置在每个计算单元上的,
+在 FastMoE 的专家并行模式中, 门网络依然是复制地被放置在每个计算单元上的,
 但是专家网络被独立地分别放置在各个计算单元上. 因此, 通过引入额外的通信操作,
 FastMoE 可以允许更多的专家网络们同时被训练,
 而其数量限制与计算单元的数量是正相关的.
 
-下图展示了一个有六个专家网络的模型被两路模型并行地训练.
+下图展示了一个有六个专家网络的模型被两路专家并行地训练.
 注意专家1-3被放置在第一个计算单元上, 而专家4-6被放置在第二个计算单元上.
 
 <p align="center">
-<img src="fastmoe_model_parallel.png" width="600">
+<img src="parallelism/fastmoe_expert_parallel.png" width="600">
 </p>
 
-FastMoE 的模型并行模式需要专门的并行策略, 而 PyTorch 和 Megatron-LM
-都不支持这样的策略. 因此, 需要使用 `fmoe.DistributedGroupedDataParallel`
+FastMoE 的专家并行模式需要专门的并行策略, 而 PyTorch 和 Megatron-LM
+都不支持这样的策略 (在我们创建 FastMoE 时). 因此, 需要使用
+`fmoe.DistributedGroupedDataParallel`
 模块来代替 PyTorch 的 DDP 模块.
 
 ### 如何训练得更快

@@ -97,6 +97,10 @@ class FMoE(nn.Module):
     the output. For each worker, FMoE only computes the output of a certain
     slice of the input batch, and will all-gather the outputs after
     computation.
+    * `mp_group` is a deprecated alias of `slice_group`
+    * `moe_group` stands for the group of process that performs expert
+    parallelism. The default value `None` means all processes. See the
+    parallelism document for more details of the groups.
     * `top_k` stands for the number of experts each token is going to.
     * `gate` is a gate class which can found in `fmoe.gates`.
     * `expert` can be specified as a module class, it is used to generate
