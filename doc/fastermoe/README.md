@@ -28,8 +28,7 @@ In FastMoE, to enable smart scheduling, set the environment variable `
 FMOE_FASTER_SCHEDULE_ENABLE` to `1` or `ON`, and it is now by default off.
 
 Please note that there are a few constraints for smart scheduling in the
-current version of FastMoE. `num_expert` has to be `1`, which means only one
-expert can reside on each worker. The input and output features have to be of
+current version of FastMoE. The input and output features have to be of
 the same length for the experts. This is because the developers of FasterMoE
 only implement this on their prototype, and they are looking for the
 community's efforts to have other cases supported.
