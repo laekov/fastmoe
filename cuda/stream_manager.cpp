@@ -45,7 +45,11 @@ void CudaStreamManager::setup(const int device) {
     streams = new cudaStream_t[SMGR_N_STREAMS];
     handles = new cublasHandle_t[SMGR_N_STREAMS];
     for (size_t i = 0; i < SMGR_N_STREAMS; ++i) {
-        checkCudaErrors(cudaStreamCreate(streams + i));
+        // SHOULD NOT USE: cudaStreamCreate(...)
+        // more details in
+        // https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html
+        checkCudaErrors(cudaStreamCreateWithFlags(streams + i,
+                        cudaStreamNonBlocking));
         checkCudaErrors(cublasCreate(handles + i));
         cublasSetStream(handles[i], streams[i]);
     }
