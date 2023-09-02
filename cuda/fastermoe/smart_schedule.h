@@ -123,6 +123,7 @@ void fmoe_cuda_fused_forward_impl(
         long num_expert, long rank, long world_size, long expert_size,
         long pipeline_gran, CudaStreamManager* smgr) {
     auto torch_stream = c10::cuda::getCurrentCUDAStream().stream();
+    cudaStreamSynchronize(torch_stream);
 
     int *local_ptr = new int[num_expert * world_size + 1];
     int *global_ptr = new int[num_expert * world_size + 1];
@@ -282,6 +283,7 @@ void fmoe_cuda_fused_backward_impl(
         long num_expert, long rank, long world_size,
         long pipeline_gran, CudaStreamManager* smgr) {
     auto torch_stream = c10::cuda::getCurrentCUDAStream().stream();
+    cudaStreamSynchronize(torch_stream);
 
     int *local_ptr = new int[num_expert * world_size + 1];
     int *global_ptr = new int[num_expert * world_size + 1];
