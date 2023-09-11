@@ -50,8 +50,12 @@ def _perform_forward(
 
 def _assert_numerical(names, moe_out_list, raw_out_list, rank, precision=1e-3):
     for name, mo, ro in zip(names, moe_out_list, raw_out_list):
+        if mo is None and ro is None:
+            continue
+        if mo is None or ro is None:
+            assert False
         err = (mo - ro).abs().max()
-        if err.dtype == torch.bfloat16:
+        if err.dtype == torch.bfloat16 or err.dtype == torch.float16:
             precision *= 100
         print("Rank {} {} abs err {}".format(rank, name, err))
         if err > precision:
@@ -93,7 +97,7 @@ class MyMoE(FMoE):
 @pytest.mark.parametrize("mp_group", [None])
 @pytest.mark.parametrize("dp_group", [None])
 @pytest.mark.parametrize("world_group", [None])
-@pytest.mark.parametrize("data_type", ['torch.FloatTensor', 'torch.DoubleTensor', 'torch.HalfTensor'])
+@pytest.mark.parametrize("data_type", ['torch.float32', 'torch.bfloat16', 'torch.float16'])
 def test_fmoe_linear(
     num_expert,
     top_k,
@@ -110,6 +114,9 @@ def test_fmoe_linear(
 ):
     torch.manual_seed(42 + rank)
     torch.cuda.manual_seed(42 + rank)
+
+    if isinstance(data_type, str):
+        data_type = eval(data_type)
 
     moe = MyMoE(
         num_expert, d_model, d_hidden, world_size, mp_group, top_k, activation
@@ -238,6 +245,9 @@ def test_fmoe(
 
     if isinstance(expert, str):
         expert = globals()[expert]
+        assert(expert is not None)
+    if isinstance(data_type, str):
+        data_type = eval(data_type)
 
     moe = FMoE(
         num_expert=num_expert,
@@ -247,7 +257,7 @@ def test_fmoe(
         mp_group=mp_group,
         expert=expert,
         top_k=top_k,
-    ).cuda().to(data_type)
+    ).cuda().type(data_type)
 
     moe_raw = BruteForceMoE(
         expert=expert,
@@ -255,7 +265,7 @@ def test_fmoe(
         d_model=d_model,
         world_size=world_size,
         top_k=top_k,
-    ).cuda().to(data_type)
+    ).cuda().type(data_type)
 
     if world_size == 1:
         for expert_moe, expert_raw in zip(moe.experts, moe_raw.experts):
@@ -266,9 +276,11 @@ def test_fmoe(
     else:
         assert len(moe.experts) >= 1
         for idx, para in enumerate(moe.experts[0].parameters()):
+            assert(para.device.type == 'cuda')
             para_tensor = torch.cat(
                 [list(expert.parameters())[idx].unsqueeze(0) for expert in moe.experts]
             )
+            assert(para_tensor.device.type == 'cuda')
             para_array = [torch.empty_like(para_tensor) for _ in range(world_size)]
             torch.distributed.all_gather(para_array, para_tensor)
             para_tensor_gathered = torch.cat(para_array, dim=0)
@@ -419,6 +431,8 @@ def test_fmoe_experts(
 
     if isinstance(expert, str):
         expert = globals()[expert]
+    if isinstance(data_type, str):
+        data_type = eval(data_type)
 
     moe = FMoE(
         num_expert=num_expert,
@@ -428,7 +442,7 @@ def test_fmoe_experts(
         mp_group=mp_group,
         expert=expert,
         top_k=top_k,
-    ).cuda().to(data_type)
+    ).cuda().type(data_type)
 
     moe_raw = BruteForceMoE(
         expert=expert,
@@ -447,9 +461,12 @@ def test_fmoe_experts(
     else:
         assert len(moe.experts) >= 1
         for idx, para in enumerate(moe.experts[0].parameters()):
+            for ep in expert.parameters():
+                assert(ep.device.type == 'cuda')
             para_tensor = torch.cat(
                 [list(expert.parameters())[idx].unsqueeze(0) for expert in moe.experts]
             )
+            assert(para_tensor.device.type == 'cuda')
             para_array = [torch.empty_like(para_tensor) for _ in range(world_size)]
             torch.distributed.all_gather(para_array, para_tensor)
             para_tensor_gathered = torch.cat(para_array, dim=0)

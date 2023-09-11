@@ -78,7 +78,7 @@ class BruteForceMoE(nn.Module):
 class NaiveExpert(nn.Module):
     def __init__(self, d_model):
         super(NaiveExpert, self).__init__()
-        self.linear = nn.Linear(d_model, d_model).cuda()
+        self.linear = nn.Linear(d_model, d_model)
 
     def forward(self, x, fec=None):
         return self.linear(x)
@@ -89,7 +89,7 @@ class LinearExpert(nn.Module):
         super(LinearExpert, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(d_model, d_model * 2), nn.ReLU(), nn.Linear(d_model * 2, d_model),
-        ).cuda()
+        )
 
     def forward(self, x, fec=None):
         return self.model(x)

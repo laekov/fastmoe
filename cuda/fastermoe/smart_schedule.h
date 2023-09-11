@@ -338,7 +338,7 @@ void fmoe_cuda_fused_backward_impl(
             collect_fn(si, i / num_expert, 0);
             if (i / num_expert == rank) {
                 cudaEventCreate(evt_reduce + i % num_expert);
-                cudaEventRecord(evt_reduce[i % num_expert], smgr->stream(num_expert));
+                cudaEventRecord(evt_reduce[i % num_expert], smgr->stream(0));
             }
             ++si;
         }
@@ -367,7 +367,6 @@ void fmoe_cuda_fused_backward_impl(
     for (long i = 0, si = 0; i < world_size * num_expert; ++i) {
         if (stored_models[i]) {
             if (i / num_expert == rank) {
-                FMOE_SWE(smgr->stream(0), evt_reduce[i % num_expert]);
                 FMOE_SWE(smgr->torchStream(), evt_reduce[i % num_expert]);
                 set_grad_fn(si, i % num_expert);
             }
