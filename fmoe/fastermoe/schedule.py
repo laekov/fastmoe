@@ -37,7 +37,7 @@ class MoEForward(Function):
                 try:
                     # To skip torch autograd's version check.
                     with torch.autograd.graph.saved_tensors_hooks(nothing, nothing):
-                        y0 = expert_fn(x, torch.tensor([x.shape[0]], dtype=torch.int64))
+                        y0 = expert_fn(x, torch.tensor([x.shape[0]], dtype=torch.int64), expert_idx)
                 except Exception as e:
                     # Ignore the error and fall back for compatibility to older
                     # versions of PyTorch
