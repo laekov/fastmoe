@@ -36,7 +36,7 @@ void fmoe_cuda_global_scatter_impl(
                         ncclChar,
                         j,
                         smgr->ncclcomm,
-                        smgr->stream(0)));
+                        smgr->torchStream()));
             }
             if (global_expert_count[idx]) {
                 NCCL_SAFE_CALL(ncclRecv(
@@ -45,14 +45,13 @@ void fmoe_cuda_global_scatter_impl(
                         ncclChar,
                         j,
                         smgr->ncclcomm,
-                        smgr->stream(0)));
+                        smgr->torchStream()));
                 recv_ptr += global_expert_count[idx];
             }
         }
         NCCL_SAFE_CALL(ncclGroupEnd());
     }
     delete [] expert_ptr;
-    smgr->sync(1);
 }
 
 template<typename scalar_t>
@@ -82,7 +81,7 @@ void fmoe_cuda_global_gather_impl(
                         ncclChar,
                         j,
                         smgr->ncclcomm,
-                        smgr->stream(0)));
+                        smgr->torchStream()));
                 send_ptr += global_expert_count[idx];
             }
             if (local_expert_count[idx]) {
@@ -92,13 +91,12 @@ void fmoe_cuda_global_gather_impl(
                         ncclChar,
                         j,
                         smgr->ncclcomm,
-                        smgr->stream(0)));
+                        smgr->torchStream()));
             }
         }
         NCCL_SAFE_CALL(ncclGroupEnd());
     }
     delete [] expert_ptr;
-    smgr->sync(1);
 }
 
 

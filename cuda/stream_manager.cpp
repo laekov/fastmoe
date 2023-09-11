@@ -19,6 +19,10 @@ cudaStream_t CudaStreamManager::stream(size_t idx) {
     return this->streams[idx % SMGR_N_STREAMS];
 }
 
+cudaStream_t CudaStreamManager::torchStream() {
+    return c10::cuda::getCurrentCUDAStream().stream();
+}
+
 cublasHandle_t CudaStreamManager::handle(size_t idx) {
     if (this->use_default) {
         return at::cuda::getCurrentCUDABlasHandle();
@@ -26,6 +30,10 @@ cublasHandle_t CudaStreamManager::handle(size_t idx) {
     return this->handles[idx % SMGR_N_STREAMS];
 }
 
+
+void CudaStreamManager::syncTorch() {
+    cudaStreamSynchronize(this->torchStream());
+}
 
 void CudaStreamManager::sync(int idx) {
     if (this->use_default) {

@@ -65,6 +65,7 @@ void fmoe_cuda_linear_forward_impl(
         CudaStreamManager* smgr) {
     scalar_t alpha = 1, beta = has_bias ? 1 : 0; 
 
+    smgr->syncTorch();
     for (int i = 0, ptr = 0; i < num_expert; ++i) {
         if (expert_count[i] == 0) {
             continue;
@@ -102,6 +103,7 @@ void fmoe_cuda_linear_backward_impl(
         const size_t out_feat,
         const size_t num_expert,
         CudaStreamManager* smgr) {
+    smgr->syncTorch();
     scalar_t alpha = 1, beta = 0;
 
     // bias
