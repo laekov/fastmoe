@@ -44,10 +44,9 @@ void _reduce_grad(
         long expert_size) {
     auto smgr = getCudaStreamManager(t.device().index());
 
-    auto torch_stream = c10::cuda::getCurrentCUDAStream().stream();
     cudaEvent_t evt_stash;
     cudaEventCreate(&evt_stash);
-    cudaEventRecord(evt_stash, torch_stream);
+    cudaEventRecord(evt_stash, smgr->torchStream());
     FMOE_SWE(smgr->stream(0), evt_stash);
     cudaEventDestroy(evt_stash);
 

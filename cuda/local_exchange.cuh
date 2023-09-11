@@ -21,9 +21,8 @@ void fmoe_cuda_assign_pos_impl(
         CudaStreamManager* smgr) {
     size_t numel = batch_size * topk;
     assign_pos_kernel
-        <<<CEIL(numel, 256), 256, 0, smgr->stream(0)>>>
+        <<<CEIL(numel, 256), 256, 0, smgr->torchStream()>>>
         (cum_count, gate, pos, numel, topk);
-    smgr->sync(1);
 }
 
 #define PERTHREAD_EXPERTS 256
@@ -74,7 +73,6 @@ void fmoe_cuda_expert_count_impl(
         const size_t batch_size, const size_t n_expert,
         CudaStreamManager* smgr) {
     expert_count_kernel
-        <<<CEIL(n_expert, PERTHREAD_EXPERTS), 256, 0, smgr->stream(0)>>>
+        <<<CEIL(n_expert, PERTHREAD_EXPERTS), 256, 0, smgr->torchStream()>>>
         (gate_idx, expert_count, batch_size, n_expert);
-    smgr->sync(1);
 }

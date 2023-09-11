@@ -34,8 +34,10 @@ public:
 
     void setup(int);
     void sync(int=0);
+    void syncTorch();
     void destroy();
 
+    cudaStream_t torchStream();
     cudaStream_t stream(size_t=0);
     cublasHandle_t handle(size_t=0);
 

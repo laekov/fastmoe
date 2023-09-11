@@ -25,9 +25,8 @@ void fmoe_cuda_limit_by_capacity_impl(const long* ec, int* cap,
         CudaStreamManager* smgr) {
     dim3 grid_dim(CEIL(n_worker, 1024), n_expert);
     dim3 block_dim(1024);
-    limit_by_capacity_kernel<<<grid_dim, block_dim, 0, smgr->stream(0)>>>(
+    limit_by_capacity_kernel<<<grid_dim, block_dim, 0, smgr->torchStream()>>>(
             ec, cap, eca, n_expert, n_worker);
-    smgr->sync(1);
 }
 
 __global__
@@ -51,8 +50,7 @@ void fmoe_cuda_prune_gate_by_capacity_impl(long* gate_idx, long* new_gate_idx,
         CudaStreamManager* smgr) {
     dim3 grid_dim(CEIL(batch_size, 1024));
     dim3 block_dim(1024);
-    prune_gate_by_capacity_kernel<<<grid_dim, block_dim, 0, smgr->stream(0)>>>(
+    prune_gate_by_capacity_kernel<<<grid_dim, block_dim, 0, smgr->torchStream()>>>(
             gate_idx, new_gate_idx, ec, batch_size, n_expert, n_worker
             );
-    smgr->sync(1);
 }

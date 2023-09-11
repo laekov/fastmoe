@@ -19,17 +19,16 @@ void fmoe_cuda_expert_exchange_impl(
                 ncclInt64,
                 i,
                 smgr->ncclcomm,
-                smgr->stream(0)));
+                smgr->torchStream()));
         NCCL_SAFE_CALL(ncclRecv(
                 global_expert_count + n_expert * i,
                 n_expert,
                 ncclInt64,
                 i,
                 smgr->ncclcomm,
-                smgr->stream(0)));
+                smgr->torchStream()));
     }
     NCCL_SAFE_CALL(ncclGroupEnd());
-    smgr->sync(1);
 }
 
 torch::Tensor _expert_exchange(
