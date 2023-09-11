@@ -122,8 +122,7 @@ void fmoe_cuda_fused_forward_impl(
         long d_model,
         long num_expert, long rank, long world_size, long expert_size,
         long pipeline_gran, CudaStreamManager* smgr) {
-    auto torch_stream = c10::cuda::getCurrentCUDAStream().stream();
-    cudaStreamSynchronize(torch_stream);
+    smgr->syncTorch();
 
     int *local_ptr = new int[num_expert * world_size + 1];
     int *global_ptr = new int[num_expert * world_size + 1];
@@ -192,7 +191,7 @@ void fmoe_cuda_fused_forward_impl(
     // C_0 ... C_n
     for (long step = 0; step < n_groups; ++step) {
         FMOE_SWE(smgr->stream(0), input_ready[step]);
-        FMOE_SWE(torch_stream, input_ready[step]);
+        FMOE_SWE(smgr->torchStream(), input_ready[step]);
         for (int ei = 0; ei < num_expert; ++ei) {
             GEN_BASE(step);
             long offset = global_ptr[ei * world_size + from_base];
@@ -203,14 +202,14 @@ void fmoe_cuda_fused_forward_impl(
                     (long) ei, step * num_expert + ei, offset, micro_batch_size, d_model, smgr);
         }
         cudaEventRecord(output_ready[step], smgr->stream(0));
-        cudaEventRecord(output_torch_ready[step], torch_stream);
+        cudaEventRecord(output_torch_ready[step], smgr->torchStream());
     }
 
     // Compute over shadowed experts
     for (long i = 0, si = 0; i < world_size * num_expert; ++i) {
         if (stored_models[i]) {
             FMOE_SWE(smgr->stream(0), evt_shadow[si]);
-            FMOE_SWE(torch_stream, evt_shadow[si]);
+            FMOE_SWE(smgr->torchStream(), evt_shadow[si]);
             stash_fn(params[si], si, 0); // always put shadowed expert at first, so expert_idx = 0
             long offset = local_ptr[i];
             long micro_batch_size = local_expert_count[i];
@@ -282,8 +281,7 @@ void fmoe_cuda_fused_backward_impl(
         long d_model,
         long num_expert, long rank, long world_size,
         long pipeline_gran, CudaStreamManager* smgr) {
-    auto torch_stream = c10::cuda::getCurrentCUDAStream().stream();
-    cudaStreamSynchronize(torch_stream);
+    smgr->syncTorch();
 
     int *local_ptr = new int[num_expert * world_size + 1];
     int *global_ptr = new int[num_expert * world_size + 1];
@@ -350,7 +348,7 @@ void fmoe_cuda_fused_backward_impl(
     // C_0 ... C_n
     for (long step = 0; step < n_groups; ++step) {
         FMOE_SWE(smgr->stream(0), input_ready[step]);
-        FMOE_SWE(torch_stream, input_ready[step]);
+        FMOE_SWE(smgr->torchStream(), input_ready[step]);
         for (int ei = 0; ei < num_expert; ++ei) {
             GEN_BASE(step);
             long offset = global_ptr[ei * world_size + from_base];
@@ -362,7 +360,7 @@ void fmoe_cuda_fused_backward_impl(
                     (long) ei, step * num_expert + ei, offset, micro_batch_size, d_model, smgr);
         }
         cudaEventRecord(output_ready[step], smgr->stream(0));
-        cudaEventRecord(output_torch_ready[step], torch_stream);
+        cudaEventRecord(output_torch_ready[step], smgr->torchStream());
     }
 
     // Collect gradients for shadowed experts
@@ -370,7 +368,7 @@ void fmoe_cuda_fused_backward_impl(
         if (stored_models[i]) {
             if (i / num_expert == rank) {
                 FMOE_SWE(smgr->stream(0), evt_reduce[i % num_expert]);
-                FMOE_SWE(torch_stream, evt_reduce[i % num_expert]);
+                FMOE_SWE(smgr->torchStream(), evt_reduce[i % num_expert]);
                 set_grad_fn(si, i % num_expert);
             }
             ++si;
