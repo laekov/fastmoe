@@ -20,7 +20,7 @@ from fmoe.layers import _fmoe_general_global_forward as naive_fwd
 @pytest.mark.parametrize("batch_size", [16, 512])
 @pytest.mark.parametrize("n_expert", [1])
 @pytest.mark.parametrize("group_sz", [1, 2, 4])
-@pytest.mark.parametrize("pass_stored", [False, True])
+@pytest.mark.parametrize("pass_stored", [True, False])
 def test_faster_shadow(n_process, d_model, batch_size, n_expert, group_sz, pass_stored):
     _run_distributed('_test_faster_shadow',
             n_process,
@@ -54,7 +54,7 @@ def _test_faster_shadow(d_model, batch_size, n_expert, pass_stored):
         m2.weight.copy_(m1.weight)
         m2.bias.copy_(m1.bias)
 
-    def ef1(x, fec):
+    def ef1(x, fec, eidx):
         y = m1(x)
         return y
     def ef2(x, fec):
@@ -62,22 +62,23 @@ def _test_faster_shadow(d_model, batch_size, n_expert, pass_stored):
         return y
 
     if pass_stored:
-        stored_models = torch.randint(0, 2, (world_size,)).bool().cuda()
+        stored_models = torch.randint(0, 2, (world_size * n_expert,)).bool().cuda()
+        while stored_models.sum().item() == 0:
+            stored_models = torch.randint(0, 2, (world_size * n_expert,)).bool().cuda()
+        stored_models[-1] = True
         dist.broadcast(stored_models, 0)
         stored_models = stored_models.cpu()
-
-    # if rank == 0:
-         # print('stored models {}'.format(stored_models))
+        print(stored_models)
 
     ensure_comm(x1, None)
     if pass_stored:
-        y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=m1, 
+        y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=[m1],
                 stored_models=stored_models)
     else:
-        y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=m1)
+        y1 = smart_fwd(x1, topk_idx, ef1, n_expert, world_size, experts=[m1])
     y1.sum().backward()
 
-    y2 = naive_fwd(x2, topk_idx, ef2, n_expert, world_size, experts=m2)
+    y2 = naive_fwd(x2, topk_idx, ef2, n_expert, world_size, experts=[m2])
     y2.sum().backward()
     _assert_numerical(['out', 'grad_in', 'grad_bias', 'grad_weight'],
             [y1, x1.grad, m1.bias.grad, m1.weight.grad],

@@ -4,6 +4,7 @@ import os
 import sys
 from typing import Dict
 import random
+import socket as sock
 
 import pytest
 import torch
@@ -24,6 +25,8 @@ def _ensure_initialized():
         dist.init_process_group(backend="nccl")
 
 
+port_count = 0
+
 def _run_distributed(func, world_size, args: Dict, script=__file__, env=dict()):
     device_count = torch.cuda.device_count()
     if device_count < world_size:
@@ -33,7 +36,9 @@ def _run_distributed(func, world_size, args: Dict, script=__file__, env=dict()):
 
     ps = []
     env["MASTER_ADDR"] = "localhost"
-    env["MASTER_PORT"] = str(random.randint(50000, 60000))
+    global port_count
+    env["MASTER_PORT"] = str(9010 + port_count)
+    port_count += 1
     env["OMPI_COMM_WORLD_SIZE"] = str(world_size)
     env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH")
 
@@ -58,7 +63,7 @@ def _run_distributed(func, world_size, args: Dict, script=__file__, env=dict()):
 @pytest.mark.parametrize("d_model", [16])
 @pytest.mark.parametrize("d_hidden", [32])
 @pytest.mark.parametrize("mp_size", [1, 2])
-@pytest.mark.parametrize("data_type", ['torch.FloatTensor', 'torch.DoubleTensor', 'torch.HalfTensor'])
+@pytest.mark.parametrize("data_type", ['torch.float32', 'torch.bfloat16', 'torch.float16'])
 def test_fmoe_linear_distributed(
     num_expert, top_k, batch_size, d_model, d_hidden, mp_size, data_type
 ):
@@ -83,7 +88,8 @@ def test_fmoe_linear_distributed(
 @pytest.mark.parametrize("d_model", [16])
 @pytest.mark.parametrize("expert", ["NaiveExpert", "LinearExpert"])
 @pytest.mark.parametrize("mp_size", [1, 2])
-def test_fmoe_distributed(num_expert, top_k, batch_size, d_model, expert, mp_size):
+@pytest.mark.parametrize("data_type", ['torch.float32', 'torch.bfloat16', 'torch.float16'])
+def test_fmoe_distributed(num_expert, top_k, batch_size, d_model, expert, mp_size, data_type):
     _run_distributed(
         "_test_fmoe",
         mp_size * 2,
@@ -94,6 +100,7 @@ def test_fmoe_distributed(num_expert, top_k, batch_size, d_model, expert, mp_siz
             "d_model": d_model,
             "expert": expert,
             "mp_size": mp_size,
+            "data_type": data_type,
         },
     )
 
@@ -137,8 +144,29 @@ if __name__ == "__main__":
         del args["mp_size"]
         locals()[sys.argv[1]](**args)
     else:
-        test_fmoe_local_ddp(mp_size=2)
-        test_fmoe_linear_distributed(
-            num_expert=4, top_k=2, batch_size=4, d_model=8, d_hidden=8, mp_size=2,
-            data_type="torch.HalfTensor"
+        torch.distributed.init_process_group(backend="nccl")
+        args = dict(mp_size=1, data_type='torch.float16')
+        args["rank"] = torch.distributed.get_rank()
+        args["world_size"] = torch.distributed.get_world_size()
+        args["mp_group"] = [
+            torch.distributed.new_group(
+                ranks=[j * args["mp_size"] + i for i in range(args["mp_size"])],
+                backend="nccl",
+            )
+            for j in range(args["world_size"] // args["mp_size"])
+        ][args["rank"] // args["mp_size"]]
+        args["dp_group"] = [
+            torch.distributed.new_group(
+                ranks=[
+                    i * args["mp_size"] + j
+                    for i in range(args["world_size"] // args["mp_size"])
+                ],
+                backend="nccl",
+            )
+            for j in range(args["mp_size"])
+        ][args["rank"] % args["mp_size"]]
+        args["world_group"] = torch.distributed.new_group(
+            ranks=list(range(args["world_size"])), backend="nccl",
         )
+        del args["mp_size"]
+        _test_fmoe(4, 2, 16, 2, 'NaiveExpert', **args)

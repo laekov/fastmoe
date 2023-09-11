@@ -30,4 +30,4 @@ fi
 
 export CUDA_VISIBLE_DEVICES=$localrank
 
-exec $@
+exec $@ 2>&1 | tee $RANK.log
