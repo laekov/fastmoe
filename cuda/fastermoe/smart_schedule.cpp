@@ -154,7 +154,7 @@ torch::Tensor _smart_sch_backward(
     auto global_grad_in = grad_out.new_zeros({global_batch_size, d_model});
     auto grad_in = grad_out.new_zeros({buf_batch_size, d_model});
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_out.scalar_type(),
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16,grad_out.scalar_type(),
             "fmoe_cuda_smartsch_backward", ([&] {
         fmoe_cuda_fused_backward_impl(
             backward_fn,
