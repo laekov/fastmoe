@@ -15,9 +15,9 @@ class SwitchGate(NaiveGate):
     """
 
     def __init__(self, d_model, num_expert, world_size, topk=1,
-            switch_eps=.1, capacity=(1.2, 2.4)):
+            switch_eps=.1, capacity=(1.2, 2.4), gate_bias=True):
         assert topk == 1, 'topk should be 1 in switch'
-        super().__init__(d_model, num_expert, world_size, top_k=1)
+        super().__init__(d_model, num_expert, world_size, top_k=1, gate_bias=gate_bias)
         self.switch_eps = switch_eps
         self.capacity = capacity
 

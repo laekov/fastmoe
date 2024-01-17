@@ -105,6 +105,8 @@ class FMoE(nn.Module):
     * `gate` is a gate class which can found in `fmoe.gates`.
     * `expert` can be specified as a module class, it is used to generate
     `num_expert` expert modules.
+    * `gate_bias` is only valid for naive_gate and its subclasses, it means
+    whether to add bias to the gate module.
     """
 
     def __init__(
@@ -121,6 +123,7 @@ class FMoE(nn.Module):
         gate_hook=None,
         mask=None,
         mask_dict=None,
+        gate_bias=True,
     ):
         super().__init__()
         self.num_expert = num_expert
@@ -149,7 +152,10 @@ class FMoE(nn.Module):
         else:
             self.experts_fused = True
 
-        self.gate = gate(d_model, num_expert, world_size, top_k)
+        if issubclass(gate, NaiveGate):
+            self.gate = gate(d_model, num_expert, world_size, top_k, gate_bias=gate_bias)
+        else:
+            self.gate = gate(d_model, num_expert, world_size, top_k)
         self.gate_hook = gate_hook
         self.mask = mask
         self.mask_dict = mask_dict
