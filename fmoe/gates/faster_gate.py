@@ -31,8 +31,8 @@ except Exception:
 
 
 class FasterGate(NaiveGate):
-    def __init__(self, d_model, n_expert, world_size, node_rank):
-        super().__init__(d_model, n_expert, world_size, top_k=2)
+    def __init__(self, d_model, n_expert, world_size, node_rank, gate_bias=True):
+        super().__init__(d_model, n_expert, world_size, top_k=2, gate_bias=gate_bias)
         self.ne_per_node = nw_per_node * n_expert
         self.ogn_ratio = .14
         try:

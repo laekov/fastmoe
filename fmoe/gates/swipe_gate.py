@@ -13,8 +13,8 @@ import fmoe_cuda as fmoe_native
 
 
 class SwipeGate(NaiveGate):
-    def __init__(self, d_model, num_expert, world_size, top_k=2):
-        super().__init__(d_model, num_expert, world_size, top_k)
+    def __init__(self, d_model, num_expert, world_size, top_k=2, gate_bias=True):
+        super().__init__(d_model, num_expert, world_size, top_k, gate_bias)
 
     def swipe_once(self, idx, capacity, bias):
         with torch.no_grad():
