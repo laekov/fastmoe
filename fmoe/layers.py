@@ -105,6 +105,8 @@ class FMoE(nn.Module):
     * `gate` is a gate class which can found in `fmoe.gates`.
     * `expert` can be specified as a module class, it is used to generate
     `num_expert` expert modules.
+    * `gate_bias` is only valid for naive_gate and its subclasses, it means
+    whether to add bias to the gate module.
     """
 
     def __init__(

@@ -65,8 +65,8 @@ class MyExpert(nn.Module):
 
 
 class MyGate(NaiveGate):
-    def __init__(self, d_model, num_expert, world_size, top_k=2):
-        super().__init__(d_model, num_expert, world_size, top_k)
+    def __init__(self, d_model, num_expert, world_size, top_k=2, gate_bias=True):
+        super().__init__(d_model, num_expert, world_size, top_k, gate_bias=gate_bias)
 
     def forward(self, inp, return_all_scores=False):
         if type(inp) == dict:
