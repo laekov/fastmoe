@@ -1,5 +1,5 @@
 diff --git a/megatron/arguments.py b/megatron/arguments.py
-index b35af1d..2a55699 100644
+index b35af1df..4c36694f 100644
 --- a/megatron/arguments.py
 +++ b/megatron/arguments.py
 @@ -20,6 +20,9 @@ import os
@@ -22,9 +22,21 @@ index b35af1d..2a55699 100644
      # Custom arguments.
      if extra_args_provider is not None:
          parser = extra_args_provider(parser)
-
+@@ -232,7 +238,11 @@ def parse_args(extra_args_provider=None, defaults={},
+         assert args.checkpoint_activations, \
+             'for distribute-checkpointed-activations to work you '\
+             'need to enable checkpoint-activations'
+-
++    # if fmoe_num_experts is not specified,
++    # we are using lower version of megatron,
++    # copy num_experts to fmoe_num_experts
++    if not hasattr(args, 'fmoe_num_experts'):
++        args.fmoe_num_experts = args.num_experts
+     _print_args(args)
+     return args
+ 
 diff --git a/megatron/data/indexed_dataset.py b/megatron/data/indexed_dataset.py
-index 1251066..32afb2f 100644
+index 12510662..32afb2fa 100644
 --- a/megatron/data/indexed_dataset.py
 +++ b/megatron/data/indexed_dataset.py
 @@ -95,7 +95,7 @@ dtypes = {
@@ -46,7 +58,7 @@ index 1251066..32afb2f 100644
      }
  
 diff --git a/megatron/optimizer/__init__.py b/megatron/optimizer/__init__.py
-index 823a51f..32f4b2e 100644
+index 823a51f4..32f4b2e1 100644
 --- a/megatron/optimizer/__init__.py
 +++ b/megatron/optimizer/__init__.py
 @@ -69,8 +69,10 @@ def get_megatron_optimizer(model):
@@ -63,7 +75,7 @@ index 823a51f..32f4b2e 100644
      if args.fp16 or args.bf16:
  
 diff --git a/megatron/optimizer/clip_grads.py b/megatron/optimizer/clip_grads.py
-index 036a1d4..81d5bd9 100644
+index 036a1d4c..81d5bd96 100644
 --- a/megatron/optimizer/clip_grads.py
 +++ b/megatron/optimizer/clip_grads.py
 @@ -54,17 +54,23 @@ def clip_grad_norm_fp32(parameters, max_norm, norm_type=2):
@@ -123,7 +135,7 @@ index 036a1d4..81d5bd9 100644
                  grad_norm = torch.norm(grad, norm_type)
                  total_norm += grad_norm ** norm_type
 diff --git a/megatron/optimizer/optimizer.py b/megatron/optimizer/optimizer.py
-index 368f587..080b06f 100644
+index 368f5875..080b06f0 100644
 --- a/megatron/optimizer/optimizer.py
 +++ b/megatron/optimizer/optimizer.py
 @@ -250,6 +250,9 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
@@ -169,7 +181,7 @@ index 368f587..080b06f 100644
          num_zeros_in_grad = self.count_zeros() if \
                              self.log_num_zeros_in_grad else None
 diff --git a/megatron/schedules.py b/megatron/schedules.py
-index d346c30..8eef46c 100644
+index d346c30d..8eef46c8 100644
 --- a/megatron/schedules.py
 +++ b/megatron/schedules.py
 @@ -23,7 +23,11 @@ from megatron import get_timers
@@ -318,7 +330,7 @@ index d346c30..8eef46c 100644
              p2p_communication.send_backward(input_tensor_grad, timers=timers)
  
 diff --git a/megatron/training.py b/megatron/training.py
-index 1ab57e9..fbe2fe8 100644
+index 1ab57e9c..fbe2fe8e 100644
 --- a/megatron/training.py
 +++ b/megatron/training.py
 @@ -35,14 +35,23 @@ from megatron import update_num_microbatches
