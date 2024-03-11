@@ -42,7 +42,7 @@ class SwitchGate(NaiveGate):
         top1_score = top1_score.to(dtype=inp.dtype)
 
         cap_rate = self.capacity[0 if self.training else 1]
-        capacity = math.ceil(cap_rate * inp.shape[0])
+        capacity = math.ceil(cap_rate * inp.shape[0] / self.num_expert)
         _new_lec, _new_gec, top1_idx = limit_by_capacity(
                 top1_idx, self.num_expert, self.world_size, capacity)
 
