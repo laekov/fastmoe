@@ -26,8 +26,8 @@ FastMoE 是一个易用且高效的基于 PyTorch 的 MoE 模型训练系统.
 FastMoE 包含一些定制的 PyTorch 算子, 包含一些 C 的组件. 用 `python setup.py install`
 来简单地安装 FastMoE.
 
-FastMoE 分布式模型并行特性默认是不被启用的. 如果它需要被启用,
-则需要在运行上述命令时加入环境变量 `USE_NCCL=1`.
+FastMoE 分布式模型并行特性默认是被启用的. 如果它需要被禁用,
+则需要在运行上述命令时加入环境变量 `USE_NCCL=0`.
 
 注意, 由于 PyTorch 框架通常仅集成了 NCCL 的运行时组件, 额外的 NCCL
 开发包需要被安装在编译环境中, 而且它的版本需要与 PyTorch 的版本相对应. 推荐使用
