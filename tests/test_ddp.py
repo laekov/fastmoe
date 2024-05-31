@@ -46,7 +46,6 @@ def _run_distributed(func, world_size, args: Dict, script=__file__, env=dict()):
         env["OMPI_COMM_WORLD_RANK"] = str(i)
         p = subprocess.Popen(
             [sys.executable, script, func, json.dumps(args)],
-            stdout=subprocess.PIPE,
             env=env
         )
         ps.append(p)
