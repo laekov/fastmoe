@@ -134,7 +134,7 @@ def _fmoe_general_global_forward(inp, gate, expert_fn, n_expert, world_size, exp
 
     if stored_models is None:
         stored_models = policy_fn(local_expert_count, global_expert_count,
-                n_expert, world_size)
+                n_expert, world_size, inp.device)
 
     topk = 1
     if len(gate.shape) == 2:

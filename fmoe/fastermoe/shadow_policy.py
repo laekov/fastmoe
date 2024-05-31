@@ -7,7 +7,7 @@ from .config import float_from_env, switch_from_env
 from fmoe.functions import get_moe_group
 
 
-def global_policy(local_expert_count, _gec, num_expert, world_size):
+def global_policy(local_expert_count, _gec, num_expert, world_size, device):
     r"""
     This is the policy for two-layer MLPs, using the formula in the PPoPP paper.
     A few parameters are used in this policy.
@@ -22,7 +22,7 @@ def global_policy(local_expert_count, _gec, num_expert, world_size):
     d_model = float_from_env('FMOE_FASTER_GLBPLC_DMODEL', 2048)
 
     moe_group = get_moe_group()
-    local_expert_count = local_expert_count.cuda()
+    local_expert_count = local_expert_count.to(device)
     agecs = [torch.empty_like(local_expert_count) for _ in range(world_size)]
     dist.all_gather(agecs, local_expert_count, group=moe_group)
     all_global_expert_count = torch.stack(agecs)
@@ -60,7 +60,7 @@ def global_policy(local_expert_count, _gec, num_expert, world_size):
     return res
 
 
-def no_shadow_policy(_lec, _gec, num_expert, world_size):
+def no_shadow_policy(_lec, _gec, num_expert, world_size, device):
     res = torch.zeros(world_size * num_expert, dtype=bool)
     return res
 
