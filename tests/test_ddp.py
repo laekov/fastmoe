@@ -44,16 +44,29 @@ def _run_distributed(func, world_size, args: Dict, script=__file__, env=dict()):
 
     for i in range(world_size):
         env["OMPI_COMM_WORLD_RANK"] = str(i)
+        output = ''
         p = subprocess.Popen(
             [sys.executable, script, func, json.dumps(args)],
-            env=env
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, # Combine stderr into stdout
+            text=True,
+            env=env,
         )
         ps.append(p)
 
+    outputs = []
+    retcs = []
     for p in ps:
-        p.wait()
+        output, _ = p.communicate()
         retc = p.poll()
-        assert retc == 0
+        retcs.append(retc)
+        outputs.append(output)
+
+    for i, output in enumerate(outputs):
+        print("\n".join(map(lambda l: f"Rank {i}: {l}", output.splitlines())))
+
+    for i, retc in enumerate(retcs):
+        assert retc == 0, f"Process {i} returns {retc}"
 
 
 @pytest.mark.parametrize("num_expert", [4, 8])
