@@ -33,7 +33,7 @@ if os.environ.get('MOE_DEBUG', '0') == '1':
     cxx_flags.append('-DMOE_DEBUG')
 
 if is_rocm_pytorch:
-    define_macros=[('FMOE_USE_HIP', None)]
+    define_macros=[('FMOE_USE_HIP', None), ('HIPBLAS_USE_HIP_HALF=1', None)]
 else:
     define_macros=[]
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
             CUDAExtension(
                 name='fmoe_cuda', 
                 sources=[
-                    'cuda/stream_manager.cpp',
+                    'cuda/stream_manager.cu',
                     'cuda/local_exchange.cu',
                     'cuda/balancing.cu',
                     'cuda/global_exchange.cpp',

@@ -1,4 +1,4 @@
-#include "stream_manager.h"
+#include "stream_manager.cuh"
 #ifdef FMOE_USE_NCCL
 
 void fmoe_cuda_expert_exchange_impl(

@@ -1,4 +1,4 @@
-#include "stream_manager.h"
+#include "stream_manager.cuh"
 #include "utils/cublas_wrapper.h"
 
 
