@@ -86,6 +86,16 @@ static const char *_cudaGetErrorEnum(cublasStatus_t error) {
       return "CUBLAS_STATUS_LICENSE_ERROR";
 #endif
 
+#ifdef FMOE_USE_HIP
+    case HIPBLAS_STATUS_HANDLE_IS_NULLPTR:
+      return "HIPBLAS_STATUS_HANDLE_IS_NULLPTR";
+
+    case HIPBLAS_STATUS_INVALID_ENUM:
+      return "HIPBLAS_STATUS_INVALID_ENUM";
+
+    case HIPBLAS_STATUS_UNKNOWN:
+      return "HIPBLAS_STATUS_UNKNOWN";
+#endif
   }
 
   return "<unknown>";
