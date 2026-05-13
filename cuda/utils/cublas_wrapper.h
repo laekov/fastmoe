@@ -40,11 +40,7 @@ inline cublasStatus_t cublasXgemmBatched(cublasHandle_t handle,
                                   const __half           *beta,
                                   __half           *Carray[], int ldc,
                                   int batchCount) {
-#ifdef FMOE_USE_HIP
-    return rocblas_hgemm_batched(handle, transa, transb, m, n, k, (const rocblas_half*)alpha, (const rocblas_half* const*)Aarray, lda, (const rocblas_half* const*)Barray, ldb, (const rocblas_half*)beta, (rocblas_half* const*)Carray, ldc, batchCount);
-#else
     return cublasHgemmBatched(handle, transa, transb, m, n, k, alpha, Aarray, lda, Barray, ldb, beta, Carray, ldc, batchCount);
-#endif
 }
 
 
@@ -78,11 +74,7 @@ inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
                                 const __half *B, int ldb,
                                 const __half *beta,
                                 __half *C, int ldc) {
-#ifdef FMOE_USE_HIP
-    return rocblas_hgemm(handle, transa, transb, m, n, k, (const rocblas_half*)alpha, (const rocblas_half* )A, lda, (const rocblas_half* )B, ldb, (const rocblas_half*)beta, (rocblas_half* )C, ldc);
-#else
     return cublasHgemm(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
-#endif
 }
 
 inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
@@ -93,21 +85,12 @@ inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
                                 const c10::Half *B, int ldb,
                                 const c10::Half *beta,
                                 c10::Half *C, int ldc) {
-#ifdef FMOE_USE_HIP
-    return rocblas_hgemm(handle, transa, transb, m, n, k,
-            (const rocblas_half*)alpha,
-            (const rocblas_half*)A, lda,
-            (const rocblas_half*)B, ldb,
-            (const rocblas_half*)beta,
-            (rocblas_half*)C, ldc);
-#else
     return cublasHgemm(handle, transa, transb, m, n, k,
             (const __half*)alpha,
             (const __half*)A, lda,
             (const __half*)B, ldb,
             (const __half*)beta,
             (__half*)C, ldc);
-#endif
 }
 
 inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
@@ -118,11 +101,17 @@ inline cublasStatus_t cublasXgemm(cublasHandle_t handle,
                                 const c10::BFloat16 *B, int ldb,
                                 const c10::BFloat16 *beta,
                                 c10::BFloat16 *C, int ldc) {
-#ifdef FMOE_USE_HIP
-    // TODO: Support bf16 for HIP
-    assert(false);
-#else
     const float alpha_fp32(*alpha), beta_fp32(*beta);
+#ifdef FMOE_USE_HIP
+    return hipblasGemmEx(handle, transa, transb, m, n, k,
+            (const float*)&alpha_fp32,
+            (const void*)A, HIP_R_16BF, lda,
+            (const void*)B, HIP_R_16BF, ldb,
+            (const float*)&beta_fp32,
+            (void*)C, HIP_R_16BF, ldc,
+            (hipblasComputeType_t) HIPBLAS_COMPUTE_32F,
+            (hipblasGemmAlgo_t) HIPBLAS_GEMM_DEFAULT);
+#else
     return cublasSgemmEx(handle, transa, transb, m, n, k,
             (const float*)&alpha_fp32,
             (const void*)A, CUDA_R_16BF, lda,

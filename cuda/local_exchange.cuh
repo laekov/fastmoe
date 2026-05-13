@@ -1,4 +1,4 @@
-#include "stream_manager.h"
+#include "stream_manager.cuh"
 #include "utils/helper_cuda.h"
 #include "utils/fmoe_utils.h"
 

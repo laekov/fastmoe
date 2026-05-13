@@ -7,7 +7,7 @@
 #include <ATen/cuda/CUDAContext.h>
 
 #include "fastermoe/status.h"
-#include "stream_manager.h"
+#include "stream_manager.cuh"
 
 #define SMGR_N_STREAMS 16
 

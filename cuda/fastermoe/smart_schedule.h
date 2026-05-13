@@ -9,7 +9,7 @@
 #include <cuda_runtime.h>
 #include <nccl.h>
 
-#include "../stream_manager.h"
+#include "../stream_manager.cuh"
 
 #if defined(CUDA_VERSION) && (CUDA_VERSION < 110010)
 #define FMOE_SWE(__s__,__e__) cudaStreamWaitEvent(__s__,__e__,0)
